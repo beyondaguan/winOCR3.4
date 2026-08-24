@@ -1,0 +1,16 @@
+# 批处理文件必须保持「GBK 编码 + CRLF 行尾」，否则 cmd.exe 会中文乱码、
+# 且对 LF 行尾的 if/for 多行块解析不稳。禁止 Git 做任何行尾或编码转换。
+*.bat   -text
+*.cmd   -text
+
+# 其余文本一律 UTF-8 + LF
+*.py    text eol=lf
+*.md    text eol=lf
+*.toml  text eol=lf
+*.txt   text eol=lf
+
+# 二进制资源
+*.onnx        binary
+*.argosmodel  binary
+*.png         binary
+*.ico         binary

@@ -1,0 +1,52 @@
+# WinOCR 3.4 依赖清单（Windows 10/11 + Python 3.10 ~ 3.14）
+#
+# 分层说明：core 层（配置/事件总线/注册表/管线）只用标准库，零第三方依赖。
+# 下面每一组依赖只服务于某一个插件轴，缺了它只是那一轴不可用，程序照常启动。
+# 想验证这一点：装完 core 后直接 `python main.py doctor`，缺什么一目了然。
+
+# ---- 必需：截图 / 图像处理 ----
+Pillow>=9.0.0
+
+# ---- OCR 轴（rapidocr 插件）----
+# PP-OCRv6 需要 ONNX IR version 10，故 onnxruntime >= 1.23.2
+# 模型已内置在 models/v6_tiny/，首次运行零联网
+numpy>=1.20.0
+onnxruntime>=1.23.2
+rapidocr>=3.9.0
+
+# ---- 翻译轴 · argos 插件（完全离线，回退链最后保障）----
+# 无 torch 独立实现：直接驱动 CTranslate2 + SentencePiece，
+# 不依赖 argostranslate / stanza / spacy，体积从 ~1.2GB 降到 ~200MB。
+# 语言包放 vendor/argos_packages/ 或 ~/.local/share/argos-translate/packages/
+ctranslate2>=4.0
+sentencepiece>=0.2.0
+
+# ---- 翻译轴 · 源语言检测（langid，轻量，只分中英；缺失时回落字符占比法）----
+langid>=1.1.6
+
+# ---- 附件轴（AI 对话读文档）----
+PyMuPDF>=1.24.0    # PDF 全文提取
+python-docx>=0.8.11  # Word
+openpyxl>=3.0.0    # Excel
+
+# ---- 全局热键（缺失时应用内 Ctrl+Shift+Q 退出兜底仍可用）----
+keyboard>=0.13.5
+
+# ---- 划词取词：UIA TextPattern.GetSelection() 直读（WPS/浏览器兼容，不碰剪贴板）----
+# 缺失时划词自动回退「模拟 Ctrl+C 读剪贴板」通道
+uiautomation>=2.0.0
+
+# ---- GUI ----
+# 界面用标准库 Tkinter（Python 自带），无需安装任何 GUI 依赖。
+# 只维护一套 Tkinter 界面（零第三方 GUI 依赖）。
+
+# ---- 朗读 TTS：edge-tts（在线，微软 Neural 语音；缺网时自动降级系统 OneCore 神经语音）----
+# edge-tts 是免费在线 TTS，音质接近真人；离线时 speak() 自动降级 OneCore
+edge-tts>=7.0.0
+
+# ---- 可选 ----
+# pyperclip>=1.8.2   # 剪贴板文本；不装则自动回退到 Win32 API / Tk 剪贴板
+tkinterdnd2>=0.4.0   # AI 对话面板拖放文件支持（原生 WM_DROPFILES 在 Tk 上不工作，必须装）
+pystray>=0.19.0     # 系统托盘（P2-3，可选）：不装则静默跳过，用「隐藏窗口+全局热键」常驻
+#
+# 翻译轴的 mymemory / glm / hunyuan 插件只用标准库 urllib，无需额外依赖。

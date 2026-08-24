@@ -1,0 +1,37 @@
+# 最小 CI：在推送 / PR 时跑 headless pytest，把取词 / 取消 / 守卫等回归测试纳入门禁。
+# 设计要点：
+#   - 跑在 windows-latest（与本体平台一致，uiautomation/keyboard 等 Windows 专属依赖不会在 CI 崩）；
+#   - 仅装 [dev]（核心依赖 Pillow + pytest），App().build() 靠懒加载重型 OCR/翻译 SDK，无需装 full；
+#   - GUI 冒烟测试在检测到 CI 环境变量时强制跳过（见 tests/test_gui_smoke.py），只跑无头可测部分。
+name: CI
+
+on:
+  push:
+    branches: ["master", "main", "3.4"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install (minimal: core deps + pytest)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests (headless)
+        env:
+          WINOCR_CI: "1"
+        run: |
+          python -m pytest -q

@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "winocr"
+# 版本号单一真相源：winocr/version.py 的 __version__
+# （pyproject 不再写死版本，避免与运行时版本漂移导致双版本并存/双开）
+dynamic = ["version"]
+description = "插件化的截图识字 / 离线翻译 / AI 解读工具（Tk 单界面）"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["ocr", "screenshot", "translate", "offline", "plugin"]
+
+# core 层零依赖：只装这些就能跑 `python main.py doctor`
+dependencies = [
+    "Pillow>=9.0.0",
+]
+
+[project.optional-dependencies]
+ocr = ["numpy>=1.20.0", "onnxruntime>=1.23.2", "rapidocr>=3.9.0"]
+argos = ["ctranslate2>=4.0", "sentencepiece>=0.2.0"]
+attach = ["PyMuPDF>=1.24.0", "python-docx>=0.8.11", "openpyxl>=3.0.0"]
+hotkey = ["keyboard>=0.13.5"]
+selection = ["uiautomation>=2.0.0"]
+tts = ["edge-tts>=7.0.0"]
+dnd = ["tkinterdnd2>=0.4.0"]
+tray = ["pystray>=0.19.0"]
+# full = 全部功能轴（与 requirements.txt 对齐，缺一轴只是该轴不可用）
+full = [
+    "numpy>=1.20.0", "onnxruntime>=1.23.2", "rapidocr>=3.9.0",
+    "ctranslate2>=4.0", "sentencepiece>=0.2.0",
+    "langid>=1.1.6",
+    "PyMuPDF>=1.24.0", "python-docx>=0.8.11", "openpyxl>=3.0.0",
+    "keyboard>=0.13.5", "uiautomation>=2.0.0", "edge-tts>=7.0.0",
+    "tkinterdnd2>=0.4.0", "pystray>=0.19.0",
+]
+dev = ["pytest>=7.0", "pyinstaller>=6.0"]
+
+[project.scripts]
+winocr = "main:main"
+
+[tool.setuptools]
+packages = ["winocr", "winocr.core", "winocr.services", "winocr.services.ocr",
+            "winocr.services.translate", "winocr.services.ai",
+            "winocr.services.capture", "winocr.services.attach",
+            "winocr.services.persistence", "winocr.services.openai_compatible",
+            "winocr.ui", "winocr.ui.tk"]
+
+# 版本号动态来自 winocr/version.py（单一真相源），构建时读取 __version__ 属性
+[tool.setuptools.dynamic]
+version = { attr = "winocr.version.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

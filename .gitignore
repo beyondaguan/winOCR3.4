@@ -1,0 +1,29 @@
+# ---- Python ----
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# ---- 大文件资源（单独打包/下载，不入仓库）----
+models/
+vendor/
+
+# ---- 本机配置与数据（含 API Key，严禁上传）----
+config.toml
+.winocr/
+.workbuddy/
+history.json
+
+# ---- 打包产物 / 系统文件 ----
+dist/
+build/
+*.7z
+*.rar
+*.zip
+Thumbs.db
+Desktop.ini
+
+# ---- 编辑器 ----
+.idea/
+.vscode/
