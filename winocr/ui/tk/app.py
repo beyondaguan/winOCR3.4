@@ -11,14 +11,11 @@
 """
 from __future__ import annotations
 
-import ctypes as _ct
 import logging
 import os as _os
 import queue as _queue
-import subprocess as _subprocess
 import threading
 import time
-from ctypes import wintypes as _wt
 
 from ..base import UiAdapter
 from ...core.event_bus import Events
@@ -33,6 +30,9 @@ from ...services.capture.selection import (
     send_ctrl_c as _send_ctrl_c,
     foreground_title as _foreground_title,
 )
+
+# 进程退出守卫（P-11/P-13）：run.bat 的 .venv shim 宿主进程连根强杀。
+from .exit_guard import force_exit_venv_tree as _force_exit_venv_tree
 
 # 日志收口（P2-9）：按需初始化 winocr.selection 日志；WINOCR_DEBUG=1 时全量 DEBUG。
 _ensure_sel_logging()
@@ -58,120 +58,6 @@ def _sel_log_static(msg: str, level: int = logging.DEBUG) -> None:
 # 15s 对 medium 档 OCR（实测 ~10s）+ 翻译 / 云端视觉 OCR 不够，曾导致并行识别；
 # 30s 足够覆盖正常链路，又不会让卡死拖太久。
 _BUSY_WATCHDOG_SECONDS = 30.0
-
-
-def _win32_parent_info():
-    """返回 (父进程PID, 父进程可执行文件全路径)。
-
-    仅 Windows。通过 Toolhelp 快照查父 PID，再用 GetProcessImageFileNameW
-    取父进程 image 路径（形如 \\\\Device\\...\\.venv\\Scripts\\pythonw.exe）。
-    无父进程 / 非 Windows 时返回 (None, None)。
-    """
-    TH32CS_SNAPPROCESS = 0x00000002
-    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-    MAXP = _wt.MAX_PATH
-
-    class _PROCESSENTRY32W(_ct.Structure):
-        _fields_ = [
-            ("dwSize", _wt.DWORD),
-            ("cntUsage", _wt.DWORD),
-            ("th32ProcessID", _wt.DWORD),
-            ("th32DefaultHeapID", _ct.POINTER(_ct.c_ulong)),
-            ("th32ModuleID", _wt.DWORD),
-            ("cntThreads", _wt.DWORD),
-            ("th32ParentProcessID", _wt.DWORD),
-            ("pcPriClassBase", _ct.c_long),
-            ("dwFlags", _wt.DWORD),
-            ("szExeFile", _ct.c_wchar * MAXP),
-        ]
-
-    k32 = _ct.windll.kernel32
-    cur = _os.getpid()
-    snap = k32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
-    if snap in (0, _wt.HANDLE(-1).value):
-        return None, None
-    parent_pid = None
-    try:
-        e = _PROCESSENTRY32W()
-        e.dwSize = _ct.sizeof(_PROCESSENTRY32W)
-        if not k32.Process32FirstW(snap, _ct.byref(e)):
-            return None, None
-        while True:
-            if e.th32ProcessID == cur:
-                parent_pid = e.th32ParentProcessID
-                break
-            if not k32.Process32NextW(snap, _ct.byref(e)):
-                return None, None
-    finally:
-        k32.CloseHandle(snap)
-    if not parent_pid:
-        return None, None
-
-    hproc = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, parent_pid)
-    if not hproc:
-        return parent_pid, None
-    try:
-        buf = _ct.create_unicode_buffer(MAXP)
-        size = _wt.DWORD(MAXP)
-        ok = k32.QueryFullProcessImageNameW(hproc, 0, buf, _ct.byref(size))
-        exe = buf.value if ok else None
-    finally:
-        k32.CloseHandle(hproc)
-    return parent_pid, exe
-
-
-def _current_cmdline_has_main_py() -> bool:
-    """当前进程命令行是否含 main.py（run.bat 的 GUI 进程才满足）。
-
-    用 GetCommandLineW 读当前进程命令行，不依赖 PowerShell（pythonw 下
-    PowerShell 查命令行会返回空）。pytest / 工具脚本由 .venv shim 拉起但
-    命令行是 `-m pytest ...`，不含 main.py，据此区分「run.bat 起的 GUI」。
-    """
-    try:
-        k32 = _ct.windll.kernel32
-        k32.GetCommandLineW.restype = _ct.c_wchar_p
-        cmd = k32.GetCommandLineW() or ""
-        return "main.py" in cmd.lower()
-    except Exception:
-        return False
-
-
-def _force_exit_venv_tree():
-    """进程真正退出（含 run.bat 的 .venv shim 宿主进程）。
-
-    run.bat 用 `.venv\\Scripts\\pythonw.exe main.py` 启动，该 shim 是重定向器，
-    会再拉起真正解释器作为子进程。子进程内 os._exit(0) 只退自已，shim 父进程残留，
-    导致下次 run.bat 又要 stop_winocr.py 杀进程。
-
-    这里：仅当「父进程是 .venv 下的 python/pythonw（venv shim）**且** 当前进程
-    命令行含 main.py（确认是 run.bat 起的 GUI）」时，才对父进程 tree 强制
-    taskkill（连带本进程一起结束）；否则只 os._exit(0)。
-
-    第二个条件至关重要：pytest 等测试进程同样由 .venv shim 拉起（shim→真身），
-    若只看父进程是 venv shim 就会把 pytest 的 shim 父进程 taskkill 掉，导致
-    整个测试进程被自己发出的 taskkill /T 连根杀死（无 traceback 的 exit=1）。
-    """
-    ppid, pexe = _win32_parent_info()
-    if pexe and ppid:
-        pe = pexe.replace("/", "\\")
-        is_venv_shim = ("\\.venv\\" in pe
-                        and pe.lower().endswith(("python.exe", "pythonw.exe")))
-        if is_venv_shim and _current_cmdline_has_main_py():
-            flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-            try:
-                _subprocess.Popen(
-                    ["taskkill", "/F", "/T", "/PID", str(ppid)],
-                    creationflags=flags,
-                    stdin=_subprocess.DEVNULL,
-                    stdout=_subprocess.DEVNULL,
-                    stderr=_subprocess.DEVNULL,
-                    close_fds=True,
-                )
-            except Exception:
-                pass
-            _os._exit(0)
-            return
-    _os._exit(0)
 
 
 class TkUi(UiAdapter):
@@ -289,87 +175,8 @@ class TkUi(UiAdapter):
         self.root.title(f"WinOCR {__version__} — 截图识字 · 翻译 · AI")
         self.root.geometry(cfg.ui.window_size)
         self.root.minsize(640, 460)
-        self._style_ttk(dark)
-
-    def _style_ttk(self, dark: bool) -> None:
-        """给 ttk 原生控件上色。
-
-        深色模式必须换掉 vista 主题：vista/xpnative 的按钮、下拉框、滚动条
-        是系统绘制的位图，**无法染色**，深色下会留一片刺眼的浅色控件。
-        clam 是纯 Tk 绘制，什么都能改，所以深色走 clam、浅色继续用 vista
-        （原生观感更好）。
-        """
-        from tkinter import ttk
-
-        from . import theme
-        try:
-            style = ttk.Style(self.root)
-            names = style.theme_names()
-            if not dark:
-                if "vista" in names:
-                    style.theme_use("vista")
-                # 浅色不强改控件底色：vista 原生观感本身就对，只统一字号
-                style.configure(".", font=theme.UI_FONT)
-                return
-
-            if "clam" in names:
-                style.theme_use("clam")
-
-            bg = theme.CARD_BG            # 面板/窗口底
-            raised = theme.INPUT_BG       # 按钮/下拉等"凸起"控件底（比面板略亮）
-            trough = theme.CANVAS_BG      # 滚动条凹槽/进度条底（最暗）
-            fg = theme.TEXT_MAIN
-            border = theme.BORDER
-            inp = theme.INPUT_BG
-            self.root.configure(bg=bg)
-
-            style.configure(".", background=bg, foreground=fg,
-                            fieldbackground=inp, bordercolor=border,
-                            font=theme.UI_FONT)
-            style.configure("TFrame", background=bg)
-            style.configure("TLabel", background=bg, foreground=fg)
-            style.configure("TLabelframe", background=bg, foreground=fg,
-                            bordercolor=border)
-            style.configure("TLabelframe.Label", background=bg, foreground=fg)
-            style.configure("TCheckbutton", background=bg, foreground=fg)
-            style.configure("TRadiobutton", background=bg, foreground=fg)
-            style.configure("TButton", background=raised, foreground=fg,
-                            bordercolor=border, focuscolor=border)
-            style.map("TButton",
-                      background=[("active", theme.ACCENT_HOVER),
-                                  ("disabled", bg)],
-                      foreground=[("active", "white"),
-                                  ("disabled", theme.TEXT_MUTED)])
-            style.configure("TEntry", fieldbackground=inp, foreground=fg,
-                            insertcolor=fg, bordercolor=border)
-            style.configure("TSpinbox", fieldbackground=inp, foreground=fg,
-                            background=raised, arrowcolor=fg, bordercolor=border)
-            style.configure("TCombobox", fieldbackground=inp, foreground=fg,
-                            background=raised, arrowcolor=fg, bordercolor=border)
-            style.map("TCombobox", fieldbackground=[("readonly", inp)],
-                      foreground=[("readonly", fg)])
-            # 下拉列表是 Tk 原生 Listbox，只能用 option 数据库改
-            self.root.option_add("*TCombobox*Listbox.background", inp)
-            self.root.option_add("*TCombobox*Listbox.foreground", fg)
-            self.root.option_add("*TCombobox*Listbox.selectBackground",
-                                 theme.ACCENT)
-            self.root.option_add("*TCombobox*Listbox.selectForeground", "white")
-            style.configure("TNotebook", background=bg, bordercolor=border)
-            style.configure("TNotebook.Tab", background=trough, foreground=fg,
-                            padding=(10, 4))
-            style.map("TNotebook.Tab",
-                      background=[("selected", bg)],
-                      foreground=[("selected", theme.ACCENT)])
-            style.configure("TPanedwindow", background=bg)
-            style.configure("Vertical.TScrollbar", background=raised,
-                            troughcolor=trough, bordercolor=border, arrowcolor=fg)
-            style.configure("Horizontal.TScrollbar", background=raised,
-                            troughcolor=trough, bordercolor=border, arrowcolor=fg)
-            style.configure("Horizontal.TProgressbar", background=theme.ACCENT,
-                            troughcolor=trough, bordercolor=border)
-            style.configure("TSeparator", background=border)
-        except Exception:
-            pass
+        from .style import apply_ttk_style
+        apply_ttk_style(self.root, dark)
 
     def _bind_global_keys(self) -> None:
         """应用内永久闸门：全局热键库失效/关闭时，主窗口有焦点也能退出。
