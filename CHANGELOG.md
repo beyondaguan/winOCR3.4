@@ -1,5 +1,62 @@
 # WinOCR 更新日志
 
+## 3.4.18 — 工程化收尾（2026-08-25）
+
+> 正式发版：把「补完一~五」的成果统一归档到 3.4.18，版本号与 CHANGELOG / version.py 对齐。
+> 全量 **146 项测试通过**，`main.py doctor` 正常。
+
+### 完整退出修复（P-11 + P-13）
+
+- **根因**：`run.bat` 用 `.venv\Scripts\pythonw.exe main.py` 启动，该 shim 是重定向器，
+  会再拉起真正解释器作为子进程。`os._exit(0)` 只退「真身子进程」，父 shim 残留 → 每次启动都要强杀。
+- **修复**：`winocr/ui/tk/app.py` 新增 `_force_exit_venv_tree()`。退出时用 Windows Toolhelp
+  快照查父进程，若父进程是 `.venv` 下的 python/pythonw（venv shim）**且** 当前进程命令行含
+  main.py（`GetCommandLineW` 读当前进程），对父进程树执行 `taskkill /F /T` 连父带子一起强杀；
+  否则只 `os._exit(0)`。`quit_app()` 与托盘 2 秒强退线程都改走该函数。
+- **二次踩坑（P-11）**：pythonw 下 PowerShell 查父进程命令行返回空，守卫静默失败。
+- **三次踩坑（P-13）**：只凭「父进程是 .venv shim」会误杀 pytest（pytest 同样由 shim 拉起），
+  最终判定收紧为「父进程是 .venv shim 且 当前进程命令行含 main.py」。
+- **验证**：真机托盘退出后 `python tools\list_winocr_proc.py` 无任何 `main.py` 进程残留。
+
+### PYID 人机对账工具（P-12）
+
+- `tools/list_winocr_proc.py` 把 venv shim resolve 到真实解释器（读 `pyvenv.cfg` 的 home），
+  对真实路径做 sha1 取前 10 位得 **PYID**（固定身份）。新增 `--pyid <ID>` 反查、按 PYID 归并。
+- 用途：AI 与用户对账「跑的是不是同一解释器」，比对 PYID 而非动态 PID。
+
+### 测试数据隔离（WINOCR_HOME）
+
+- `tests/conftest.py` 新增 session 级 autouse fixture `_isolated_winocr_home`，
+  把 `WINOCR_HOME` 重定向到 pytest 临时目录。测试不再读写真实 `~/.winocr`，结果可重复、
+  不污染数据、沙箱/CI 不被权限拦截。业务代码零改动（`paths.user_dir()` 本就支持该变量）。
+
+### dialogs.py 按职责拆分
+
+- 1905 行单文件拆为 `dialogs_common`（工具）/ `dialogs_settings`（热键+API 设置）/
+  `dialogs_data`（知识库+历史+导入）/ `dialogs_misc`（关于+插件+首次运行）。
+  `dialogs.py` 保留为薄壳 re-export，旧 import 兼容。
+
+### 知识库跨项目检索修复
+
+- `open_knowledge` 面板新增「所有项目」复选框，`knowledge.search` 支持 `project="*"`
+  跨项目查询；修复前向引用（按钮 command 引用未定义函数）与 Treeview iid 越界问题。
+
+### 修改文件清单
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/version.py` | 3.4.17 → 3.4.18，release_date 2026-08-25，HIGHLIGHTS 更新 |
+| `winocr/ui/tk/app.py` | `_win32_parent_info()` + `_current_cmdline_has_main_py()` + `_force_exit_venv_tree()` |
+| `winocr/ui/tk/dialogs.py` | 薄壳化，re-export 拆分后的 4 模块 |
+| `winocr/ui/tk/dialogs_common.py` | 新增：工具函数 + 常量 |
+| `winocr/ui/tk/dialogs_settings.py` | 新增：热键 / API 设置 / 连接测试 |
+| `winocr/ui/tk/dialogs_data.py` | 新增：知识库 / 历史 / 导入 |
+| `winocr/ui/tk/dialogs_misc.py` | 新增：关于 / 插件 / 首次运行 |
+| `winocr/services/persistence/knowledge.py` | `search` 支持 `project="*"` 跨项目查询 |
+| `tools/list_winocr_proc.py` | PYID 列 + `--pyid` 反查 + 归并 |
+| `tests/conftest.py` | `_isolated_winocr_home` fixture（WINOCR_HOME 隔离） |
+| `DOC/踩坑.md` | P-11 / P-12 / P-13 + 二三次踩坑 |
+
 ## 3.4.17 补完五 — 完整退出修复 + PYID 人机对账工具 + 测试数据隔离（2026-08-24）
 
 > 不升版本号（仍 3.4.17），不新增依赖。解决「托盘退出后 run.bat 每次都要杀进程」，

@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """版本信息（单一真相来源，pyproject 与 UI 都从这里读）。"""
 
-__version__ = "3.4.17"
+__version__ = "3.4.18"
 __version_name__ = "截图识字 · 离线翻译 · AI 解读"
-__release_date__ = "2026-08-22"
+__release_date__ = "2026-08-25"
 
 # 相对 3.0 的架构变化摘要（UI「关于」对话框显示）
 HIGHLIGHTS = [
+    "3.4.18 工程化收尾：完整退出修复（venv shim 连根强杀，run.bat 不再杀进程）/ PYID 固定解释器身份对账工具 / 测试数据隔离（WINOCR_HOME）/ dialogs.py 按职责拆分 / 知识库跨项目检索修复",
     "3.4.17 TK 改进蓝图落地（P0~P2 全做）：P0-1 设置页点亮隐藏字段（离线模式/结构化 OCR/窗口尺寸/AI 提供方只读）/ P0-2 知识库浏览·检索·导出（JSON·MD·CSV）/ P0-3 源语言检测增强（langid 仅分中英，假名预检）/ P1 插件黑名单·OCR 智能升档·取色器克制折叠/ P2 首次运行向导·设置搜索·OpenAI 兼容提供方·系统托盘",
     "3.4.16 P3-15 分包/分发交付：PyInstaller onedir 双 exe（GUI WinOCR.exe + CLI WinOCR-cli.exe）+ models/vendor/plugins 外置便携 + 打包验证全绿（doctor 插件完整 / OCR 实测 / GUI 启动）；registry 插件发现改 pkgutil 兼容打包 .pyc 形态",
     "3.4.15 SAPI5 离线兜底裁决落地：补降级链回归测试 7 项（edge 命中即停 / edge 失败降级 sapi / edge 异常降级 / edge 模式不降级 / sapi 模式不走 edge / 全失败提示 / 取消跳过），锁定回退链语义",
