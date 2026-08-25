@@ -54,6 +54,15 @@ class RapidOcrEngine(OcrEngine):
         super().configure(**kwargs)
         self._models_cache.clear()
 
+    def apply_config(self, config) -> None:
+        """从 OcrConfig 注入本地档位参数（云端参数由 VisionOcrEngine 处理）。"""
+        self.preprocess = config.preprocess
+        self.model_type = config.model_type
+        self.structured = config.structured
+        self.auto_upgrade = config.auto_upgrade
+        self.upgrade_threshold = config.upgrade_threshold
+        self._models_cache.clear()
+
     # ------------------------------------------------------------------
     # 依赖 / 模型
     # ------------------------------------------------------------------

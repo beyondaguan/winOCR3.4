@@ -73,6 +73,20 @@ class VisionOcrEngine(OcrEngine):
                            else (float(cloud_top_p)
                                  if float(cloud_top_p) > 0 else None))
 
+    def apply_config(self, config) -> None:
+        """从 OcrConfig 注入云端视觉 OCR 参数（app 组合根调用）。"""
+        self.configure(
+            cloud_api_key=config.api_key,
+            cloud_base_url=config.base_url,
+            cloud_model=config.vision_model,
+            cloud_max_output_tokens=config.max_output_tokens,
+            cloud_retry_attempts=config.retry_attempts,
+            cloud_retry_backoff=config.retry_backoff,
+            cloud_timeout=config.timeout,
+            cloud_temperature=config.vision_temperature,
+            cloud_top_p=config.vision_top_p,
+        )
+
     def _client(self) -> OpenAICompatibleClient:
         cfg = OpenAIClientConfig(
             api_key=self.api_key,

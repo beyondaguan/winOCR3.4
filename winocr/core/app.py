@@ -206,19 +206,8 @@ class App:
         }
 
     def _configure_ocr(self, inst) -> None:
-        """注入云端视觉 OCR 参数（来自 OCR 功能自己的连接参数）。"""
-        kw = self._cloud_ocr_kwargs()
-        o = self.config.ocr
-        inst.configure(preprocess=o.preprocess, model_type=o.model_type,
-                       structured=o.structured,
-                       cloud_api_key=kw["api_key"], cloud_base_url=kw["base_url"],
-                       cloud_model=kw["model"],
-                       cloud_max_output_tokens=kw["max_output_tokens"],
-                       cloud_retry_attempts=kw["retry_attempts"],
-                       cloud_retry_backoff=kw["retry_backoff"],
-                       cloud_timeout=kw["timeout"],
-                       cloud_temperature=kw["vision_temperature"],
-                       cloud_top_p=kw["vision_top_p"])
+        """注入 OCR 引擎参数（本地档位 / 云端视觉 OCR，来自 OCR 功能自己的连接参数）。"""
+        inst.apply_config(self.config.ocr)
 
     def _make_ai(self):
         cls = self.discovered["ai"].get(self.config.ai.provider)
@@ -236,26 +225,12 @@ class App:
         return inst
 
     def _configure_ai(self, inst) -> None:
-        a = self.config.ai
-        # 3.4 起 AI 对话直接持有文本 + 视觉两套参数，无「连接」中间层。
-        # 视觉侧与文本侧同在本功能配置内，按独立平台处理（不跨连接继承）。
-        inst.set_api_key(a.api_key)
-        inst.set_base_url(a.base_url)
-        inst.set_models(text_model=a.text_model, vision_model=a.vision_model)
-        inst.set_vision_config(base_url=a.base_url, api_key=a.api_key,
-                               model=a.vision_model,
-                               temperature=a.vision_temperature,
-                               top_p=a.vision_top_p,
-                               max_output_tokens=a.vision_max_output_tokens,
-                               independent=True)
-        inst.set_limits(max_output_tokens=a.max_output_tokens,
-                        max_context_tokens=a.max_context_tokens,
-                        max_turns=a.max_turns,
-                        retry_attempts=a.retry_attempts,
-                        retry_backoff=a.retry_backoff,
-                        timeout=a.timeout,
-                        temperature=a.temperature,
-                        top_p=a.top_p)
+        """注入 AI 提供方全部连接参数（文本 + 视觉两套，来自 AiConfig）。
+
+        3.4 起 AI 对话直接持有文本 + 视觉两套参数，无「连接」中间层；
+        视觉侧与文本侧同在本功能配置内，按独立平台处理（不跨连接继承）。
+        """
+        inst.apply_config(self.config.ai)
 
     # ------------------------------------------------------------------
     # 运行期变更（配置改了必须一处生效，杜绝「改了没重载」）

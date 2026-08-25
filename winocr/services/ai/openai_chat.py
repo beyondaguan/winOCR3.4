@@ -169,6 +169,28 @@ class OpenAiCompatProvider(AiProvider):
         if top_p is not None:
             self.top_p = float(top_p)
 
+    def apply_config(self, config) -> None:
+        """从 AiConfig 注入全部连接参数（app 组合根调用，替代散落的 set_* 长调用）。"""
+        self.set_api_key(config.api_key)
+        self.set_base_url(config.base_url)
+        self.set_models(text_model=config.text_model, vision_model=config.vision_model)
+        self.set_vision_config(
+            base_url=config.base_url, api_key=config.api_key,
+            model=config.vision_model,
+            temperature=config.vision_temperature,
+            top_p=config.vision_top_p,
+            max_output_tokens=config.vision_max_output_tokens,
+            independent=True)
+        self.set_limits(
+            max_output_tokens=config.max_output_tokens,
+            max_context_tokens=config.max_context_tokens,
+            max_turns=config.max_turns,
+            retry_attempts=config.retry_attempts,
+            retry_backoff=config.retry_backoff,
+            timeout=config.timeout,
+            temperature=config.temperature,
+            top_p=config.top_p)
+
     # ------------------------------------------------------------------
     # 运行时
     # ------------------------------------------------------------------
