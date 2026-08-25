@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install (minimal: core deps + pytest)
+      - name: Install minimal (core deps + pytest)
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
@@ -35,3 +35,29 @@ jobs:
           WINOCR_CI: "1"
         run: |
           python -m pytest -q
+
+  # 打包验证：确保 PyInstaller 构建产物可启动、命令可跑（防「代码能测、打包后崩」）。
+  build:
+    runs-on: windows-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install full + dev (incl. PyInstaller)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[full,dev]"
+
+      - name: Build (PyInstaller onedir)
+        run: |
+          python -m PyInstaller packaging/winocr.spec --clean --noconfirm
+
+      # 冒烟用 CLI exe：windowed 主 exe 下 stdout=None，doctor 的 print 会崩（见 spec 注释）。
+      - name: Smoke test built CLI exe
+        run: |
+          dist\WinOCR\WinOCR-cli.exe doctor
