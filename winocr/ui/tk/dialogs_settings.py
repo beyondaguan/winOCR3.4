@@ -1,116 +1,137 @@
 # -*- coding: utf-8 -*-
-"""设置对话框：热键 / API 与引擎 / 连接测试。
+"""API 与引擎设置对话框。
 
-从 dialogs.py 拆分而来。
+从 dialogs.py 拆分而来；热键设置（dialogs_hotkey）与连接测试
+（dialogs_test）已各自独立成模块。
 """
 from __future__ import annotations
 
-import os
-import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import theme
-from ...services.hotkey import ACTIONS
-from ...services.translate.glm import GlmEngine
-from .dialogs_common import (
-    _post_to_ui, _center, _modal, _ScrollableFrame,
-    _record_key, _hotkey_status,
-)
+from .dialogs_common import _modal, _center, _ScrollableFrame
+from .dialogs_test import _test_ai, _test_translate, _test_ocr
 
-def open_hotkey_settings(window) -> None:
-    app = window.app
-    root = window.root
-    cfg = app.config.hotkey
 
-    win = _modal(root, "热键设置", "460x360")
-    ttk.Label(win, text="点进输入框后直接按组合键即可录制", padding=(12, 10),
-              foreground=theme.TEXT_MUTED).pack(anchor=tk.W)
+# ---------------- 连接参数编辑辅助（模块级，供 open_api_settings 复用） ----------------
+def _lim_row(parent, r, label, var, note=""):
+    ttk.Label(parent, text=label).grid(row=r, column=0, sticky=tk.W, pady=(4, 0))
+    ttk.Entry(parent, textvariable=var, width=8).grid(row=r, column=1,
+                                                      sticky=tk.W, padx=(6, 0))
+    if note:
+        ttk.Label(parent, text=note, foreground=theme.TEXT_MUTED,
+                  font=theme.UI_FONT_SMALL).grid(row=r, column=2, sticky=tk.W,
+                                                 padx=(10, 0))
 
-    body = ttk.Frame(win, padding=(12, 0))
-    body.pack(fill=tk.BOTH, expand=True)
 
-    entries = {}
-    for i, (action, label) in enumerate(ACTIONS.items()):
-        ttk.Label(body, text=label + "：").grid(row=i, column=0, sticky=tk.W, pady=5)
-        # 初始显示「实际生效的组合键」：用户覆盖 > 当前已注册（含胶囊默认）> 空，
-        # 避免用户看到空白却不知道 ctrl+shift+a 正在生效（旧实现用 getattr(cfg,action)
-        # 取到空串，既是显示 bug，也导致录制结果写不进 overrides 而永不生效）。
-        if action == "quit":
-            initial = cfg.quit
-        else:
-            ov = cfg.overrides or {}
-            if action in ov and ov[action]:
-                initial = ov[action]
-            elif app.hotkeys is not None and action in app.hotkeys.registered:
-                initial = app.hotkeys.registered[action]
-            else:
-                initial = ""
-        var = tk.StringVar(value=initial)
-        ent = ttk.Entry(body, textvariable=var, width=26)
-        ent.grid(row=i, column=1, sticky=tk.W, pady=5, padx=(6, 6))
-        ent.bind("<KeyPress>", lambda e, v=var: _record_key(e, v))
-        ttk.Button(body, text="清除", width=5,
-                   command=lambda v=var: v.set("")).grid(row=i, column=2)
-        entries[action] = var
+def _make_conn_editor(parent, obj, *, vision: bool = True) -> dict:
+    """生成一组「地址 / 密钥 / 模型 / 采样 / 限流」控件，绑定到 obj 字段。
 
-    enabled = tk.BooleanVar(value=cfg.enabled)
-    ttk.Checkbutton(body, text="启用全局热键（关闭后仅窗口内快捷键可用）",
-                    variable=enabled).grid(row=len(ACTIONS), column=0, columnspan=3,
-                                           sticky=tk.W, pady=(10, 0))
+    返回 StringVar 字典，供 _save 写回。视觉相关字段（vision_*）仅当
+    vision=True 时生成（AI 带图对话 / 云端 OCR 需要，翻译不需要）。
+    """
+    v = {
+        "base_url": tk.StringVar(value=obj.base_url),
+        "api_key": tk.StringVar(value=obj.api_key),
+        "text_model": tk.StringVar(value=obj.text_model),
+        "vision_model": tk.StringVar(value=obj.vision_model),
+        "temperature": tk.StringVar(value=str(obj.temperature)),
+        "top_p": tk.StringVar(value=str(obj.top_p)),
+        "max_output_tokens": tk.StringVar(value=str(obj.max_output_tokens)),
+        "max_context_tokens": tk.StringVar(value=str(obj.max_context_tokens)),
+        "max_turns": tk.StringVar(value=str(obj.max_turns)),
+        "timeout": tk.StringVar(value=str(obj.timeout)),
+        "retry_attempts": tk.StringVar(value=str(obj.retry_attempts)),
+        "retry_backoff": tk.StringVar(value=str(obj.retry_backoff)),
+    }
+    ttk.Label(parent, text="Base URL（留空 = 平台官方默认）"
+              ).grid(row=0, column=0, columnspan=4, sticky=tk.W)
+    ttk.Entry(parent, textvariable=v["base_url"], width=52
+              ).grid(row=1, column=0, columnspan=4, sticky=tk.W, pady=(2, 0))
+    ttk.Label(parent, text="例：https://open.bigmodel.cn/api/paas/v4/chat/completions\n"
+                           "    https://api.siliconflow.cn/v1/chat/completions",
+              foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL, justify=tk.LEFT
+              ).grid(row=2, column=0, columnspan=4, sticky=tk.W, pady=(2, 0))
 
-    status = ttk.Label(win, text=_hotkey_status(app), foreground=theme.TEXT_MUTED,
-                       padding=(12, 4), wraplength=430, justify=tk.LEFT)
-    status.pack(fill=tk.X)
+    ttk.Label(parent, text="API Key").grid(row=3, column=0, sticky=tk.W, pady=(8, 0))
+    e_key = ttk.Entry(parent, textvariable=v["api_key"], width=42, show="•")
+    e_key.grid(row=4, column=0, columnspan=2, sticky=tk.W)
+    show_key = tk.BooleanVar(value=False)
+    ttk.Checkbutton(parent, text="显示", variable=show_key,
+                    command=lambda: e_key.config(show="" if show_key.get() else "•")
+                    ).grid(row=4, column=2, sticky=tk.W, padx=(6, 0))
 
-    def _save():
-        # 修复：quit 是独立字段；其余动作必须写进 cfg.overrides，否则 reload() 永远
-        # 回退胶囊默认（ctrl+shift+a），新录的 alt+q 不生效、且 setattr 的临时属性
-        # 不被序列化 → 重启即丢失。清空某动作 = 从 overrides 移除，恢复胶囊默认。
-        quit_combo = entries["quit"].get().strip().lower()
-        seen = {}
-        if quit_combo:
-            seen[quit_combo] = "quit"
-        overrides = dict(cfg.overrides or {})
-        for action, var in entries.items():
-            if action == "quit":
-                continue
-            combo = var.get().strip().lower()
-            if not combo:
-                overrides.pop(action, None)
-                continue
-            if combo in seen:
-                messagebox.showwarning(
-                    "热键冲突",
-                    f"「{ACTIONS[action]}」与「{ACTIONS[seen[combo]]}」都用了 {combo}",
-                    parent=win)
-                return
-            seen[combo] = action
-            overrides[action] = combo
-        cfg.overrides = overrides
-        cfg.quit = quit_combo
-        cfg.enabled = enabled.get()
-        app.apply_config()                       # 立即落盘（含 overrides）
-        ok = app.hotkeys.reload() if app.hotkeys else False
-        summary = app.hotkeys.summary() if app.hotkeys else "不可用"
-        window.set_status(("热键已更新 — " if ok else "热键已保存（") +
-                          summary + ("" if ok else "）"))
-        win.destroy()
+    ttk.Label(parent, text="文本模型（AI 对话 / 大模型翻译用）"
+              ).grid(row=5, column=0, sticky=tk.W, pady=(8, 0))
+    ttk.Entry(parent, textvariable=v["text_model"], width=30
+              ).grid(row=6, column=0, sticky=tk.W)
+    ttk.Label(parent, text="例：glm-4-flash / Qwen/Qwen2.5-Coder-7B-Instruct",
+              foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL
+              ).grid(row=6, column=1, columnspan=3, sticky=tk.W, padx=(8, 0))
 
-    def _restore():
-        from ...core.config import HotkeyConfig
-        d = HotkeyConfig()
-        for action, var in entries.items():
-            var.set(getattr(d, action))
-        enabled.set(d.enabled)
+    ttk.Label(parent, text="视觉模型（AI 带图对话 / 云端 OCR 用，留空跟随文本模型）"
+              ).grid(row=7, column=0, sticky=tk.W, pady=(8, 0))
+    ttk.Entry(parent, textvariable=v["vision_model"], width=30
+              ).grid(row=8, column=0, sticky=tk.W)
+    ttk.Label(parent, text="例：glm-4v-flash / GLM-4.1V-9B-Thinking",
+              foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL
+              ).grid(row=8, column=1, columnspan=3, sticky=tk.W, padx=(8, 0))
 
-    bar = ttk.Frame(win, padding=(12, 8))
-    bar.pack(fill=tk.X, side=tk.BOTTOM)
-    theme.accent_button(bar, "保存并生效", _save).pack(side=tk.RIGHT)
-    ttk.Button(bar, text="取消", command=win.destroy).pack(side=tk.RIGHT, padx=6)
-    ttk.Button(bar, text="恢复默认", command=_restore).pack(side=tk.LEFT)
+    lf_samp = ttk.LabelFrame(parent, text="采样参数", padding=8)
+    lf_samp.grid(row=9, column=0, columnspan=4, sticky=tk.EW, pady=(10, 0))
+    ttk.Label(lf_samp, text="Temperature").grid(row=0, column=0, sticky=tk.W)
+    ttk.Entry(lf_samp, textvariable=v["temperature"], width=8
+              ).grid(row=0, column=1, sticky=tk.W, padx=(6, 16))
+    ttk.Label(lf_samp, text="Top P").grid(row=0, column=2, sticky=tk.W)
+    ttk.Entry(lf_samp, textvariable=v["top_p"], width=8
+              ).grid(row=0, column=3, sticky=tk.W, padx=(6, 0))
+    if vision:
+        ttk.Label(lf_samp, text="视觉 Temp（<0 不发送）").grid(row=1, column=0, sticky=tk.W)
+        v["vision_temperature"] = tk.StringVar(value=str(obj.vision_temperature))
+        ttk.Entry(lf_samp, textvariable=v["vision_temperature"], width=8
+                  ).grid(row=1, column=1, sticky=tk.W, padx=(6, 16))
+        ttk.Label(lf_samp, text="视觉 Top P（<0 不发送）").grid(row=1, column=2, sticky=tk.W)
+        v["vision_top_p"] = tk.StringVar(value=str(obj.vision_top_p))
+        ttk.Entry(lf_samp, textvariable=v["vision_top_p"], width=8
+                  ).grid(row=1, column=3, sticky=tk.W, padx=(6, 0))
+        ttk.Label(lf_samp, text="视觉最大输出 (token)").grid(row=2, column=0,
+                                                            sticky=tk.W, pady=(6, 0))
+        v["vision_max_output_tokens"] = tk.StringVar(
+            value=str(obj.vision_max_output_tokens))
+        ttk.Entry(lf_samp, textvariable=v["vision_max_output_tokens"], width=8
+                  ).grid(row=2, column=1, sticky=tk.W, padx=(6, 16))
 
-    _center(win, root)
+    lf_lim = ttk.LabelFrame(parent, text="限流 / 上下文保护", padding=8)
+    lf_lim.grid(row=10, column=0, columnspan=4, sticky=tk.EW, pady=(8, 0))
+    _lim_row(lf_lim, 0, "上下文窗口上限 (token)", v["max_context_tokens"],
+             "超长自动裁剪历史")
+    _lim_row(lf_lim, 1, "每轮最大输出 (token)", v["max_output_tokens"])
+    _lim_row(lf_lim, 2, "最大对话轮次", v["max_turns"], "超出只保留最近 N 轮")
+    _lim_row(lf_lim, 3, "请求超时 (秒)", v["timeout"])
+    _lim_row(lf_lim, 4, "429 重试次数", v["retry_attempts"])
+    _lim_row(lf_lim, 5, "重试退避基数 (秒)", v["retry_backoff"], "指数增长")
+    return v
+
+
+def _apply_conn_vars(obj, v: dict) -> None:
+    """把 _make_conn_editor 返回的 StringVar 写回 obj（数字解析失败抛 ValueError）。"""
+    obj.base_url = v["base_url"].get().strip()
+    obj.api_key = v["api_key"].get().strip()
+    obj.text_model = v["text_model"].get().strip()
+    obj.vision_model = v["vision_model"].get().strip()
+    obj.temperature = float(v["temperature"].get() or 0.7)
+    obj.top_p = float(v["top_p"].get() or 0.9)
+    obj.max_output_tokens = int(v["max_output_tokens"].get() or 0) or 2048
+    obj.max_context_tokens = int(v["max_context_tokens"].get() or 0) or 32768
+    obj.max_turns = int(v["max_turns"].get() or 0) or 12
+    obj.timeout = int(v["timeout"].get() or 0) or 60
+    obj.retry_attempts = int(v["retry_attempts"].get() or 0) or 3
+    obj.retry_backoff = float(v["retry_backoff"].get() or 0) or 1.5
+    if "vision_temperature" in v:
+        obj.vision_temperature = float(v["vision_temperature"].get() or 0.0)
+        obj.vision_top_p = float(v["vision_top_p"].get() or 0.0)
+        obj.vision_max_output_tokens = int(v["vision_max_output_tokens"].get() or 0)
 
 
 def open_api_settings(window) -> None:
@@ -143,123 +164,6 @@ def open_api_settings(window) -> None:
 
     from tkinter import simpledialog
 
-    # ---------------- 连接参数编辑辅助 ----------------
-    def _lim_row(parent, r, label, var, note=""):
-        ttk.Label(parent, text=label).grid(row=r, column=0, sticky=tk.W, pady=(4, 0))
-        ttk.Entry(parent, textvariable=var, width=8).grid(row=r, column=1,
-                                                          sticky=tk.W, padx=(6, 0))
-        if note:
-            ttk.Label(parent, text=note, foreground=theme.TEXT_MUTED,
-                      font=theme.UI_FONT_SMALL).grid(row=r, column=2, sticky=tk.W,
-                                                     padx=(10, 0))
-
-    def _make_conn_editor(parent, obj, *, vision: bool = True) -> dict:
-        """生成一组「地址 / 密钥 / 模型 / 采样 / 限流」控件，绑定到 obj 字段。
-
-        返回 StringVar 字典，供 _save 写回。视觉相关字段（vision_*）仅当
-        vision=True 时生成（AI 带图对话 / 云端 OCR 需要，翻译不需要）。
-        """
-        v = {
-            "base_url": tk.StringVar(value=obj.base_url),
-            "api_key": tk.StringVar(value=obj.api_key),
-            "text_model": tk.StringVar(value=obj.text_model),
-            "vision_model": tk.StringVar(value=obj.vision_model),
-            "temperature": tk.StringVar(value=str(obj.temperature)),
-            "top_p": tk.StringVar(value=str(obj.top_p)),
-            "max_output_tokens": tk.StringVar(value=str(obj.max_output_tokens)),
-            "max_context_tokens": tk.StringVar(value=str(obj.max_context_tokens)),
-            "max_turns": tk.StringVar(value=str(obj.max_turns)),
-            "timeout": tk.StringVar(value=str(obj.timeout)),
-            "retry_attempts": tk.StringVar(value=str(obj.retry_attempts)),
-            "retry_backoff": tk.StringVar(value=str(obj.retry_backoff)),
-        }
-        ttk.Label(parent, text="Base URL（留空 = 平台官方默认）"
-                  ).grid(row=0, column=0, columnspan=4, sticky=tk.W)
-        ttk.Entry(parent, textvariable=v["base_url"], width=52
-                  ).grid(row=1, column=0, columnspan=4, sticky=tk.W, pady=(2, 0))
-        ttk.Label(parent, text="例：https://open.bigmodel.cn/api/paas/v4/chat/completions\n"
-                               "    https://api.siliconflow.cn/v1/chat/completions",
-                  foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL, justify=tk.LEFT
-                  ).grid(row=2, column=0, columnspan=4, sticky=tk.W, pady=(2, 0))
-
-        ttk.Label(parent, text="API Key").grid(row=3, column=0, sticky=tk.W, pady=(8, 0))
-        e_key = ttk.Entry(parent, textvariable=v["api_key"], width=42, show="•")
-        e_key.grid(row=4, column=0, columnspan=2, sticky=tk.W)
-        show_key = tk.BooleanVar(value=False)
-        ttk.Checkbutton(parent, text="显示", variable=show_key,
-                        command=lambda: e_key.config(show="" if show_key.get() else "•")
-                        ).grid(row=4, column=2, sticky=tk.W, padx=(6, 0))
-
-        ttk.Label(parent, text="文本模型（AI 对话 / 大模型翻译用）"
-                  ).grid(row=5, column=0, sticky=tk.W, pady=(8, 0))
-        ttk.Entry(parent, textvariable=v["text_model"], width=30
-                  ).grid(row=6, column=0, sticky=tk.W)
-        ttk.Label(parent, text="例：glm-4-flash / Qwen/Qwen2.5-Coder-7B-Instruct",
-                  foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL
-                  ).grid(row=6, column=1, columnspan=3, sticky=tk.W, padx=(8, 0))
-
-        ttk.Label(parent, text="视觉模型（AI 带图对话 / 云端 OCR 用，留空跟随文本模型）"
-                  ).grid(row=7, column=0, sticky=tk.W, pady=(8, 0))
-        ttk.Entry(parent, textvariable=v["vision_model"], width=30
-                  ).grid(row=8, column=0, sticky=tk.W)
-        ttk.Label(parent, text="例：glm-4v-flash / GLM-4.1V-9B-Thinking",
-                  foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL
-                  ).grid(row=8, column=1, columnspan=3, sticky=tk.W, padx=(8, 0))
-
-        lf_samp = ttk.LabelFrame(parent, text="采样参数", padding=8)
-        lf_samp.grid(row=9, column=0, columnspan=4, sticky=tk.EW, pady=(10, 0))
-        ttk.Label(lf_samp, text="Temperature").grid(row=0, column=0, sticky=tk.W)
-        ttk.Entry(lf_samp, textvariable=v["temperature"], width=8
-                  ).grid(row=0, column=1, sticky=tk.W, padx=(6, 16))
-        ttk.Label(lf_samp, text="Top P").grid(row=0, column=2, sticky=tk.W)
-        ttk.Entry(lf_samp, textvariable=v["top_p"], width=8
-                  ).grid(row=0, column=3, sticky=tk.W, padx=(6, 0))
-        if vision:
-            ttk.Label(lf_samp, text="视觉 Temp（<0 不发送）").grid(row=1, column=0, sticky=tk.W)
-            v["vision_temperature"] = tk.StringVar(value=str(obj.vision_temperature))
-            ttk.Entry(lf_samp, textvariable=v["vision_temperature"], width=8
-                      ).grid(row=1, column=1, sticky=tk.W, padx=(6, 16))
-            ttk.Label(lf_samp, text="视觉 Top P（<0 不发送）").grid(row=1, column=2, sticky=tk.W)
-            v["vision_top_p"] = tk.StringVar(value=str(obj.vision_top_p))
-            ttk.Entry(lf_samp, textvariable=v["vision_top_p"], width=8
-                      ).grid(row=1, column=3, sticky=tk.W, padx=(6, 0))
-            ttk.Label(lf_samp, text="视觉最大输出 (token)").grid(row=2, column=0,
-                                                                sticky=tk.W, pady=(6, 0))
-            v["vision_max_output_tokens"] = tk.StringVar(
-                value=str(obj.vision_max_output_tokens))
-            ttk.Entry(lf_samp, textvariable=v["vision_max_output_tokens"], width=8
-                      ).grid(row=2, column=1, sticky=tk.W, padx=(6, 16))
-
-        lf_lim = ttk.LabelFrame(parent, text="限流 / 上下文保护", padding=8)
-        lf_lim.grid(row=10, column=0, columnspan=4, sticky=tk.EW, pady=(8, 0))
-        _lim_row(lf_lim, 0, "上下文窗口上限 (token)", v["max_context_tokens"],
-                 "超长自动裁剪历史")
-        _lim_row(lf_lim, 1, "每轮最大输出 (token)", v["max_output_tokens"])
-        _lim_row(lf_lim, 2, "最大对话轮次", v["max_turns"], "超出只保留最近 N 轮")
-        _lim_row(lf_lim, 3, "请求超时 (秒)", v["timeout"])
-        _lim_row(lf_lim, 4, "429 重试次数", v["retry_attempts"])
-        _lim_row(lf_lim, 5, "重试退避基数 (秒)", v["retry_backoff"], "指数增长")
-        return v
-
-    def _apply_conn_vars(obj, v: dict) -> None:
-        """把 _make_conn_editor 返回的 StringVar 写回 obj（数字解析失败抛 ValueError）。"""
-        obj.base_url = v["base_url"].get().strip()
-        obj.api_key = v["api_key"].get().strip()
-        obj.text_model = v["text_model"].get().strip()
-        obj.vision_model = v["vision_model"].get().strip()
-        obj.temperature = float(v["temperature"].get() or 0.7)
-        obj.top_p = float(v["top_p"].get() or 0.9)
-        obj.max_output_tokens = int(v["max_output_tokens"].get() or 0) or 2048
-        obj.max_context_tokens = int(v["max_context_tokens"].get() or 0) or 32768
-        obj.max_turns = int(v["max_turns"].get() or 0) or 12
-        obj.timeout = int(v["timeout"].get() or 0) or 60
-        obj.retry_attempts = int(v["retry_attempts"].get() or 0) or 3
-        obj.retry_backoff = float(v["retry_backoff"].get() or 0) or 1.5
-        if "vision_temperature" in v:
-            obj.vision_temperature = float(v["vision_temperature"].get() or 0.0)
-            obj.vision_top_p = float(v["vision_top_p"].get() or 0.0)
-            obj.vision_max_output_tokens = int(v["vision_max_output_tokens"].get() or 0)
-
     # ================= 页签 1：AI 对话 =================
     p_ai = _ScrollableFrame(nb)
     nb.add(p_ai, text="AI 对话")
@@ -281,6 +185,8 @@ def open_api_settings(window) -> None:
     ttk.Combobox(p_ai.body, textvariable=provider, state="readonly", width=40,
                  values=[f"{k} — {v}" for k, v in _AI_PROVIDERS.items()]
                  ).grid(row=3, column=0, columnspan=4, sticky=tk.W, pady=(2, 0))
+
+    ai_v = _make_conn_editor(ai_body, cfg.ai, vision=True)
 
     ai_test_lbl = ttk.Label(p_ai.body, text="", foreground=theme.TEXT_MUTED, wraplength=520,
                             justify=tk.LEFT)
@@ -861,146 +767,3 @@ def open_api_settings(window) -> None:
     ttk.Button(bar, text="取消", command=win.destroy).pack(side=tk.RIGHT, padx=6)
 
     _center(win, root)
-
-
-def _test_ai(app, key, base_url, text_model, vision_model,
-              vision_base_url, vision_key, which, label) -> None:
-    key = (key or "").strip()
-    if not key:
-        label.config(text="请先填入 API Key", foreground="#c0392b")
-        return
-    label.config(text="测试中…", foreground=theme.TEXT_MUTED)
-
-    def _work():
-        from ...core.types import ChatMessage
-        try:
-            cls = app.discovered.get("ai", {}).get("glm")
-            if cls is None:
-                raise RuntimeError("未发现 GLM 提供方插件")
-            probe = cls()                    # 临时实例，不污染主对话历史
-            probe.set_api_key(key)
-            probe.set_base_url(base_url)
-            probe.set_models(text_model=text_model.strip(),
-                             vision_model=vision_model.strip())
-            probe.set_vision_config(base_url=vision_base_url.strip(),
-                                    api_key=vision_key.strip(),
-                                    model=vision_model.strip())
-            if which == "vision":
-                from PIL import Image
-                img = Image.new("RGB", (64, 64), "white")
-                reply = probe.chat(ChatMessage(
-                    text="用两个字描述这张图：空白", images=[img]))
-                model = probe.vision_client.cfg.model
-                url = probe.vision_client.cfg.effective_url()
-            else:
-                reply = probe.chat(ChatMessage(text="回复两个字：可用"))
-                model = probe.text_client.cfg.model
-                url = probe.text_client.cfg.effective_url()
-            msg = f"连接正常（{model}）:\n{url}\n{reply[:40]}"
-            color = "#1e8e3e"
-        except Exception as e:
-            msg, color = f"连接失败: {e}", "#c0392b"
-
-        def _show():
-            try:
-                label.config(text=msg, foreground=color)
-            except Exception:
-                pass
-        _post_to_ui(app, _show)
-
-    threading.Thread(target=_work, daemon=True, name="ai-test").start()
-
-
-def _test_translate(app, base_url, model, api_key, label) -> None:
-    kw = app._translate_llm_kwargs()
-    if not (api_key or kw["glm_api_key"]):
-        label.config(text="请先在「大模型翻译」页填写 API Key", foreground="#c0392b")
-        return
-    label.config(text="测试中…", foreground=theme.TEXT_MUTED)
-
-    def _work():
-        try:
-            cls = app.discovered.get("translate", {}).get("glm")
-            if cls is None:
-                raise RuntimeError("未发现 GLM 翻译引擎")
-            probe = cls()
-            probe.set_config(
-                glm_api_key=(api_key or "").strip() or kw["glm_api_key"],
-                base_url=(base_url or "").strip() or kw["base_url"],
-                model=(model or "").strip() or kw["model"],
-                max_output_tokens=kw["max_output_tokens"],
-                retry_attempts=kw["retry_attempts"],
-                retry_backoff=kw["retry_backoff"],
-            )
-            if not probe.available():
-                raise RuntimeError("翻译 API Key 仍为空")
-            out = probe.translate("Hello, world.", "en", "zh-CN")
-            msg = f"翻译正常: Hello, world. → {out}"
-            color = "#1e8e3e"
-        except Exception as e:
-            msg, color = f"连接失败: {e}", "#c0392b"
-
-        def _show():
-            try:
-                label.config(text=msg, foreground=color)
-            except Exception:
-                pass
-        _post_to_ui(app, _show)
-
-    threading.Thread(target=_work, daemon=True, name="translate-test").start()
-
-
-def _test_ocr(app, base_url, model, api_key, label) -> None:
-    """用「云端 OCR」页填的连接参数发真实测试请求。
-
-    页面上填的参数优先；留空则回落到配置里已存的值。
-    """
-    kw = app._cloud_ocr_kwargs()
-    api_key = (api_key or "").strip() or kw["api_key"]
-    base_url = (base_url or "").strip() or kw["base_url"]
-    model = (model or "").strip() or kw["model"]
-    if app.config.ocr.engine != "vision_ocr":
-        label.config(text="当前 OCR 引擎不是「云端视觉 OCR」，无需测试云端连接",
-                     foreground="#c0392b")
-        return
-    if not api_key:
-        label.config(text="请先在「云端 OCR」页填写 API Key",
-                     foreground="#c0392b")
-        return
-    label.config(text="测试中…", foreground=theme.TEXT_MUTED)
-
-    def _work():
-        try:
-            cls = app.discovered.get("ocr", {}).get("vision_ocr")
-            if cls is None:
-                raise RuntimeError("未发现云端视觉 OCR 引擎")
-            probe = cls()
-            probe.configure(cloud_api_key=api_key,
-                            cloud_base_url=base_url,
-                            cloud_model=model,
-                            cloud_max_output_tokens=kw["max_output_tokens"],
-                            cloud_retry_attempts=kw["retry_attempts"],
-                            cloud_retry_backoff=kw["retry_backoff"],
-                            cloud_timeout=kw["timeout"])
-            if not probe.available():
-                raise RuntimeError("云端 OCR API Key 为空")
-            from PIL import Image
-            img = Image.new("RGB", (80, 40), "white")
-            res = probe.recognize(img)
-            if not res.ok:
-                raise RuntimeError(res.text or "返回为空")
-            msg = f"视觉 OCR 正常（{probe._model}）:\n{res.text[:60]}"
-            color = "#1e8e3e"
-        except Exception as e:
-            msg, color = f"连接失败: {e}", "#c0392b"
-
-        def _show():
-            try:
-                label.config(text=msg, foreground=color)
-            except Exception:
-                pass
-        _post_to_ui(app, _show)
-
-    threading.Thread(target=_work, daemon=True, name="ocr-test").start()
-
-
