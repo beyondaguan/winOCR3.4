@@ -1,5 +1,44 @@
 # WinOCR 更新日志
 
+## 3.4.18+ 工程化改进（2026-08-25，未升版本号）
+
+> 3.4.18 之后的纯工程化重构，无功能变更，全量 **146 项测试通过**。
+
+### 代码一致性：裸 print() 统一收敛到 logging
+
+- 22 处裸 `print()` 替换为 `logging` 调用（事件总线异常、插件跳过、OCR 引擎回退、
+  RapidOCR 模型降级、配置告警等），9 个模块补 `logger`，3 个模块直接改。
+- 保留 `console.py` 的 3 处 `print()` 作为 CLI 输出（doctor / 命令行工具属正常 stdout）。
+
+### app.py 第二轮拆分
+
+- `winocr/ui/tk/exit_guard.py`（新增）：进程退出守卫（win32 父进程查询 + venv shim
+  连根强杀），从 app.py 拆出。
+- `winocr/ui/tk/style.py`（新增）：ttk 样式配置（浅色/深色主题），从 app.py 拆出。
+- `app.py` 874 → 701 行。
+
+### dialogs_settings.py 第二轮拆分
+
+- `winocr/ui/tk/dialogs_hotkey.py`（新增）：热键设置对话框（110 行）。
+- `winocr/ui/tk/dialogs_test.py`（新增）：AI / 翻译 / 云端 OCR 连接测试（153 行）。
+- `dialogs_settings.py` 1006 → 769 行，连接编辑辅助函数（`_make_conn_editor` /
+  `_apply_conn_vars` / `_lim_row`）提升为模块级。
+- **顺带修复**：AI 页签此前缺少 `ai_v = _make_conn_editor(...)` 定义，保存设置会
+  `NameError`、AI 连接参数编辑器从未显示；已补上。
+
+### 修改文件清单
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/app.py` | 拆出 exit_guard.py / style.py，874 → 701 行 |
+| `winocr/ui/tk/exit_guard.py` | 新增：进程退出守卫 |
+| `winocr/ui/tk/style.py` | 新增：ttk 样式配置 |
+| `winocr/ui/tk/dialogs.py` | 薄壳 re-export 更新（hotkey / test 新模块） |
+| `winocr/ui/tk/dialogs_settings.py` | 1006 → 769 行，连接编辑辅助提升模块级 |
+| `winocr/ui/tk/dialogs_hotkey.py` | 新增：热键设置 |
+| `winocr/ui/tk/dialogs_test.py` | 新增：连接测试 |
+| `winocr/core/event_bus.py` 等 9 模块 | print → logging |
+
 ## 3.4.18 — 工程化收尾（2026-08-25）
 
 > 正式发版：把「补完一~五」的成果统一归档到 3.4.18，版本号与 CHANGELOG / version.py 对齐。
