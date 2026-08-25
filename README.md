@@ -11,15 +11,12 @@
 ## 快速开始
 
 ```cmd
-setup.bat          :: 创建 .venv、装依赖、自检
+setup.bat          :: 创建 .venv、装依赖、自动下载 OCR 模型(两档)+中英翻译包、自检
 run.bat            :: 启动图形界面
 ```
 
-> 从 **GitHub 源码 zip** 安装时，`.venv` 装好后先跑一次模型下载再启动
-> （`setup.bat`/`run.bat` 已覆盖本地分发版内置模型，跳过此步）：
-> ```cmd
-> .venv\Scripts\python.exe tools\download_ocr_model.py tiny
-> ```
+> `setup.bat` 会一键完成：依赖安装 + OCR 模型（tiny 与 medium 两档，约 140MB）+ Argos 中英互译离线包（约 140MB），就绪后启动。
+> 本地分发版已内置这些文件，`setup.bat` 检测到已有且校验通过的文件会自动跳过下载；个别大文件下载失败不中断，离线翻译自动降级可用。
 
 或手动：
 
@@ -38,11 +35,14 @@ python -m venv .venv
 ```
 
 > **模型获取**：`models/`（OCR 模型）与 `vendor/`（离线翻译包）因体积原因**不进 GitHub 仓库**，需按需下载。
-> OCR 模型下载脚本：`python tools/download_ocr_model.py [tiny|medium]`（默认档位 tiny）。
+>
+> **想零下载直接用 OCR？** 把 `config.toml` 的 `ocr.model_type` 设为 `small` 即可——small 模型随 rapidocr pip 包自带，`pip install -r requirements.txt` 装完就能识别图片，不用额外下任何文件。
+> 需数字/英文高精度或智能升档时再下载其他档位：
 > - `tiny`（约 7MB，默认）与 `medium`（约 133MB，智能升档）从 ModelScope 官方仓库下载，带 SHA256 校验；
 > - `small` 模型随 rapidocr pip 包自带，零下载；
-> - 离线翻译包需自行放入 `vendor/argos_packages/`（见 DOC 文档）。
-> 下载完成后运行 `python main.py doctor` 自检确认模型可用。
+> - 离线英汉/汉英互译包（`vendor/argos_packages/`，约 140MB）：`setup.bat` 会自动从官方源下载，独立脚本为 `python tools/download_argos.py`。
+> 下载脚本：`python tools/download_ocr_model.py [tiny|medium]`（默认档位 medium，`setup.bat` 会自动下载 tiny 与 medium 两档）。
+> 模型就绪后运行 `python main.py doctor` 自检确认可用。
 
 ## 默认热键
 
