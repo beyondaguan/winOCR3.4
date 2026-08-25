@@ -3,36 +3,36 @@ chcp 936 >nul
 setlocal
 cd /d "%~dp0.."
 echo ============================================================
-echo  WinOCR æ‰“åŒ…è„šæœ¬ï¼ˆPyInstaller onedir + æ•°æ®å¤–ç½®ï¼‰
+echo  WinOCR ´ò°ü½Å±¾£¨PyInstaller onedir + Êý¾ÝÍâÖÃ£©
 echo ============================================================
 
-echo [1/4] æž„å»º WinOCR.exeï¼ˆPyInstaller onedirï¼‰...
+echo [1/4] ¹¹½¨ WinOCR.exe£¨PyInstaller onedir£©...
 .venv\Scripts\python.exe -m PyInstaller --noconfirm --clean packaging\winocr.spec
 if errorlevel 1 (
-    echo [é”™è¯¯] PyInstaller æž„å»ºå¤±è´¥
+    echo [´íÎó] PyInstaller ¹¹½¨Ê§°Ü
     pause
     exit /b 1
 )
 
-echo [1.5/4] è£å‰ªæœªç”¨äºŒè¿›åˆ¶ï¼ˆçœ ~29MBï¼‰...
-REM OpenCV çš„è§†é¢‘ IO FFmpeg åŽç«¯ï¼ˆopencv_videoio_ffmpeg*.dllï¼‰åªæœåŠ¡è§†é¢‘è¯»å†™ï¼Œ
-REM WinOCR æ˜¯ OCR å·¥å…·ä¸ç”¨è§†é¢‘ï¼Œåˆ é™¤åŽ rapidocr å›¾åƒå¤„ç†ä¸å—å½±å“ã€‚
+echo [1.5/4] ²Ã¼ôÎ´ÓÃ¶þ½øÖÆ£¨Ê¡ ~29MB£©...
+REM OpenCV µÄÊÓÆµ IO FFmpeg ºó¶Ë£¨opencv_videoio_ffmpeg*.dll£©Ö»·þÎñÊÓÆµ¶ÁÐ´£¬
+REM WinOCR ÊÇ OCR ¹¤¾ß²»ÓÃÊÓÆµ£¬É¾³ýºó rapidocr Í¼Ïñ´¦Àí²»ÊÜÓ°Ïì¡£
 if exist "dist\WinOCR\_internal\cv2\opencv_videoio_ffmpeg*.dll" del /q "dist\WinOCR\_internal\cv2\opencv_videoio_ffmpeg*.dll"
 
-echo [2/4] å¤åˆ¶ OCR æ¨¡åž‹ï¼ˆv6_tiny + v6_medium + clsï¼Œä¸Ž exe åŒçº§ï¼‰...
+echo [2/4] ¸´ÖÆ OCR Ä£ÐÍ£¨v6_tiny + v6_medium + cls£¬Óë exe Í¬¼¶£©...
 if not exist "dist\WinOCR\models" mkdir "dist\WinOCR\models"
 if exist "models\v6_tiny"   xcopy /e /i /y "models\v6_tiny"   "dist\WinOCR\models\v6_tiny"   >nul
 if exist "models\v6_medium" xcopy /e /i /y "models\v6_medium" "dist\WinOCR\models\v6_medium" >nul
 if exist "models\ch_ppocr_mobile_v2.0_cls_infer.onnx" copy /y "models\ch_ppocr_mobile_v2.0_cls_infer.onnx" "dist\WinOCR\models\" >nul
 
-echo [3/4] å¤åˆ¶æ’ä»¶ / ä¾¿æºå¼€å…³ / vendor è¯´æ˜Ž ...
+echo [3/4] ¸´ÖÆ²å¼þ / ±ãÐ¯¿ª¹Ø / vendor ËµÃ÷ ...
 if not exist "dist\WinOCR\plugins" mkdir "dist\WinOCR\plugins"
 xcopy /e /i /y "plugins" "dist\WinOCR\plugins" >nul
 if not exist "dist\WinOCR\config.toml" type nul > "dist\WinOCR\config.toml"
 if not exist "dist\WinOCR\vendor" mkdir "dist\WinOCR\vendor"
-echo ç¦»çº¿ç¿»è¯‘è¯­è¨€åŒ…æ”¾å…¥ argos_packages\ å­ç›®å½•å³è‡ªåŠ¨ç”Ÿæ•ˆï¼ˆæ— éœ€é‡æ‰“åŒ…ï¼‰> "dist\WinOCR\vendor\argos_packages_README.txt"
-REM å•å®žä¾‹ç”± exe å†…éƒ¨ CreateMutexW/FindWindowW å¤„ç†ï¼Œæ— éœ€å¤–éƒ¨ stop è„šæœ¬ã€‚
+echo ÀëÏß·­ÒëÓïÑÔ°ü·ÅÈë argos_packages\ ×ÓÄ¿Â¼¼´×Ô¶¯ÉúÐ§£¨ÎÞÐèÖØ´ò°ü£©> "dist\WinOCR\vendor\argos_packages_README.txt"
+REM µ¥ÊµÀýÓÉ exe ÄÚ²¿ CreateMutexW/FindWindowW ´¦Àí£¬ÎÞÐèÍâ²¿ stop ½Å±¾¡£
 
-echo [4/4] å®Œæˆï¼šdist\WinOCR\
-dir /s /a-d "dist\WinOCR" 2>nul | find "ä¸ªæ–‡ä»¶" || dir /s /a-d "dist\WinOCR" 2>nul | find "File(s)"
+echo [4/4] Íê³É£ºdist\WinOCR\
+dir /s /a-d "dist\WinOCR" 2>nul | find "¸öÎÄ¼þ" || dir /s /a-d "dist\WinOCR" 2>nul | find "File(s)"
 endlocal

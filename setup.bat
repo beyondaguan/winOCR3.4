@@ -4,15 +4,15 @@ setlocal
 cd /d "%~dp0"
 
 echo ============================================================
-echo   WinOCR 3.4 å®‰è£…
+echo   WinOCR 3.4 °²×°
 echo ============================================================
 echo.
 
-rem ---- é€‰æ‹© Pythonï¼ˆå…³é”®ï¼‰----
-rem GUI ä¾èµ– tkinterï¼ˆPython æ ‡å‡†åº“è‡ªå¸¦ï¼‰ï¼Œä½† WorkBuddy / åµŒå…¥å¼ / ç²¾ç®€ç‰ˆ
-rem Python å¸¸ç¼º tkinterï¼Œç”¨å®ƒå»ºçš„ venv æ²¡æœ‰ç•Œé¢ï¼Œåªèƒ½è·‘ consoleã€‚
-rem æ‰€ä»¥è¿™é‡Œä¼˜å…ˆç”¨ py å¯åŠ¨å™¨ï¼ˆå®˜æ–¹å®‰è£…é»˜è®¤å¸¦ tkinterï¼‰ï¼Œå†å›é€€ where pythonï¼Œ
-rem ä¸”æ¯æ­¥éƒ½ç”¨ `python -c "import tkinter"` å®æµ‹éªŒè¯ã€‚
+rem ---- Ñ¡Ôñ Python£¨¹Ø¼ü£©----
+rem GUI ÒÀÀµ tkinter£¨Python ±ê×¼¿â×Ô´ø£©£¬µ« WorkBuddy / Ç¶ÈëÊ½ / ¾«¼ò°æ
+rem Python ³£È± tkinter£¬ÓÃËü½¨µÄ venv Ã»ÓĞ½çÃæ£¬Ö»ÄÜÅÜ console¡£
+rem ËùÒÔÕâÀïÓÅÏÈÓÃ py Æô¶¯Æ÷£¨¹Ù·½°²×°Ä¬ÈÏ´ø tkinter£©£¬ÔÙ»ØÍË where python£¬
+rem ÇÒÃ¿²½¶¼ÓÃ `python -c "import tkinter"` Êµ²âÑéÖ¤¡£
 set "PYCMD="
 where py >nul 2>nul
 if not errorlevel 1 (
@@ -27,15 +27,15 @@ if not defined PYCMD (
 if not defined PYCMD (
     where python >nul 2>nul
     if errorlevel 1 (
-        echo [é”™è¯¯] æœªæ‰¾åˆ° pythonï¼Œè¯·å…ˆå®‰è£…å®˜æ–¹ Python 3.10 - 3.14
-        echo        ä¸‹è½½: https://www.python.org/downloads/
-        echo        å®‰è£…æ—¶åŠ¡å¿…å‹¾é€‰ "Add Python to PATH" å’Œ "tcl/tk and IDLE"
+        echo [´íÎó] Î´ÕÒµ½ python£¬ÇëÏÈ°²×°¹Ù·½ Python 3.10 - 3.14
+        echo        ÏÂÔØ: https://www.python.org/downloads/
+        echo        °²×°Ê±Îñ±Ø¹´Ñ¡ "Add Python to PATH" ºÍ "tcl/tk and IDLE"
         pause
         exit /b 1
     )
-    echo [è­¦å‘Š] PATH ä¸Šçš„ Python ä¸å¸¦ tkinterï¼Œå›¾å½¢ç•Œé¢å°†æ— æ³•å¯åŠ¨ã€‚
-    echo        åªèƒ½ä½¿ç”¨å‘½ä»¤è¡Œæ¨¡å¼ï¼ˆmain.py console / ocr / doctorï¼‰ã€‚
-    echo        è¯·å®‰è£…å®˜æ–¹ Python åé‡è·‘æœ¬è„šæœ¬ï¼šhttps://www.python.org/downloads/
+    echo [¾¯¸æ] PATH ÉÏµÄ Python ²»´ø tkinter£¬Í¼ĞÎ½çÃæ½«ÎŞ·¨Æô¶¯¡£
+    echo        Ö»ÄÜÊ¹ÓÃÃüÁîĞĞÄ£Ê½£¨main.py console / ocr / doctor£©¡£
+    echo        Çë°²×°¹Ù·½ Python ºóÖØÅÜ±¾½Å±¾£ºhttps://www.python.org/downloads/
     set "PYCMD=python"
 )
 
@@ -43,49 +43,49 @@ for /f "tokens=2" %%v in ('%PYCMD% --version 2^>^&1') do set PYVER=%%v
 echo [1/6] Python %PYVER%
 
 if not exist ".venv\Scripts\python.exe" (
-    echo [2/6] åˆ›å»ºè™šæ‹Ÿç¯å¢ƒ .venv ...
+    echo [2/6] ´´½¨ĞéÄâ»·¾³ .venv ...
     %PYCMD% -m venv .venv
     if errorlevel 1 (
-        echo [é”™è¯¯] è™šæ‹Ÿç¯å¢ƒåˆ›å»ºå¤±è´¥
+        echo [´íÎó] ĞéÄâ»·¾³´´½¨Ê§°Ü
         pause
         exit /b 1
     )
 ) else (
-    echo [2/6] è™šæ‹Ÿç¯å¢ƒå·²å­˜åœ¨ï¼Œè·³è¿‡
+    echo [2/6] ĞéÄâ»·¾³ÒÑ´æÔÚ£¬Ìø¹ı
 )
 
 set PY=.venv\Scripts\python.exe
 for /f "tokens=2" %%v in ('%PY% -V') do set VENVVER=%%v
-echo       è™šæ‹Ÿç¯å¢ƒ Python : %VENVVER%   ï¼ˆä¸ä¸Šé¢çš„ç³»ç»Ÿç‰ˆæœ¬ä¸åŒå±æ­£å¸¸ï¼‰
-%PY% -c "import tkinter" >nul 2>nul && echo       tkinter       : å¯ç”¨ï¼ŒGUI æ­£å¸¸ || echo       tkinter       : ç¼ºå¤±ï¼ŒGUI ä¸å¯ç”¨ï¼ˆè¯·ç”¨å®˜æ–¹ Python é‡è£…ï¼‰
+echo       ĞéÄâ»·¾³ Python : %VENVVER%   £¨ÓëÉÏÃæµÄÏµÍ³°æ±¾²»Í¬ÊôÕı³££©
+%PY% -c "import tkinter" >nul 2>nul && echo       tkinter       : ¿ÉÓÃ£¬GUI Õı³£ || echo       tkinter       : È±Ê§£¬GUI ²»¿ÉÓÃ£¨ÇëÓÃ¹Ù·½ Python ÖØ×°£©
 
 
-echo [3/6] å®‰è£…ä¾èµ–ï¼ˆé¦–æ¬¡çº¦ 200MBï¼Œè¯·è€å¿ƒç­‰å¾…ï¼‰...
+echo [3/6] °²×°ÒÀÀµ£¨Ê×´ÎÔ¼ 200MB£¬ÇëÄÍĞÄµÈ´ı£©...
 %PY% -m pip install --upgrade pip -q
 %PY% -m pip install -r requirements.txt
 if errorlevel 1 (
     echo.
-    echo [è­¦å‘Š] éƒ¨åˆ†ä¾èµ–å®‰è£…å¤±è´¥ã€‚å¯å…ˆè·‘è‡ªæ£€çœ‹ç¼ºå“ªä¸€é¡¹ï¼š
+    echo [¾¯¸æ] ²¿·ÖÒÀÀµ°²×°Ê§°Ü¡£¿ÉÏÈÅÜ×Ô¼ì¿´È±ÄÄÒ»Ïî£º
     echo        .venv\Scripts\python.exe main.py doctor
     pause
 )
 
-echo [4/6] ä¸‹è½½ OCR æ¨¡å‹ tiny + medium ä¸¤æ¡£ï¼ˆçº¦ 140MBï¼›æœ¬åœ°åˆ†å‘ç‰ˆå†…ç½®æ¨¡å‹å¯è·³è¿‡ï¼‰...
+echo [4/6] ÏÂÔØ OCR Ä£ĞÍ tiny + medium Á½µµ£¨Ô¼ 140MB£»±¾µØ·Ö·¢°æÄÚÖÃÄ£ĞÍ¿ÉÌø¹ı£©...
 %PY% tools\download_ocr_model.py tiny
 %PY% tools\download_ocr_model.py medium
 
-echo [5/6] ä¸‹è½½ç¦»çº¿ç¿»è¯‘åŒ…ï¼ˆä¸­è‹±äº’è¯‘ï¼Œçº¦ 140MBï¼›å¤±è´¥ä¸ä¸­æ–­ï¼Œç¦»çº¿ç¿»è¯‘è‡ªåŠ¨é™çº§ï¼‰...
+echo [5/6] ÏÂÔØÀëÏß·­Òë°ü£¨ÖĞÓ¢»¥Òë£¬Ô¼ 140MB£»Ê§°Ü²»ÖĞ¶Ï£¬ÀëÏß·­Òë×Ô¶¯½µ¼¶£©...
 %PY% tools\download_argos.py
 
-echo [6/6] è‡ªæ£€...
+echo [6/6] ×Ô¼ì...
 %PY% main.py doctor
 
 echo.
 echo ============================================================
-echo   å®‰è£…å®Œæˆ
+echo   °²×°Íê³É
 echo ------------------------------------------------------------
-echo   å¯åŠ¨å›¾å½¢ç•Œé¢ : åŒå‡» run.bat
-echo   è‡ªæ£€         : .venv\Scripts\python.exe main.py doctor
-echo   å‘½ä»¤è¡Œè¯†åˆ«   : .venv\Scripts\python.exe main.py ocr å›¾ç‰‡.png -t zh-CN
+echo   Æô¶¯Í¼ĞÎ½çÃæ : Ë«»÷ run.bat
+echo   ×Ô¼ì         : .venv\Scripts\python.exe main.py doctor
+echo   ÃüÁîĞĞÊ¶±ğ   : .venv\Scripts\python.exe main.py ocr Í¼Æ¬.png -t zh-CN
 echo ============================================================
 pause
