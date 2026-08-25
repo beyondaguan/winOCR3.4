@@ -26,6 +26,15 @@
 - **顺带修复**：AI 页签此前缺少 `ai_v = _make_conn_editor(...)` 定义，保存设置会
   `NameError`、AI 连接参数编辑器从未显示；已补上。
 
+### 配置注入收敛：长参数列表 → apply_config(config)
+
+- 4 个服务类新增 `apply_config(config)`：`RapidOcrEngine`（本地档位）、
+  `VisionOcrEngine`（云端视觉 OCR）、`GlmChatProvider` / `OpenAiCompatProvider`
+  （AI 文本 + 视觉全参数）。
+- `app.py` 的 `_configure_ocr` / `_configure_ai` 从 12+ 参数展开调用收敛为一行
+  `inst.apply_config(self.config.xxx)`，配置对象 → 实例属性的映射收进服务类。
+- 保留 `set_*` / `configure` 旧接口（测试直接调用不受影响）。
+
 ### 修改文件清单
 
 | 文件 | 改动 |
@@ -37,6 +46,11 @@
 | `winocr/ui/tk/dialogs_settings.py` | 1006 → 769 行，连接编辑辅助提升模块级 |
 | `winocr/ui/tk/dialogs_hotkey.py` | 新增：热键设置 |
 | `winocr/ui/tk/dialogs_test.py` | 新增：连接测试 |
+| `winocr/core/app.py` | `_configure_ocr` / `_configure_ai` 收敛为 `apply_config` |
+| `winocr/services/ai/glm_chat.py` | 新增 `apply_config` |
+| `winocr/services/ai/openai_chat.py` | 新增 `apply_config` |
+| `winocr/services/ocr/rapidocr.py` | 新增 `apply_config` |
+| `winocr/services/ocr/vision_ocr.py` | 新增 `apply_config` |
 | `winocr/core/event_bus.py` 等 9 模块 | print → logging |
 
 ## 3.4.18 — 工程化收尾（2026-08-25）
