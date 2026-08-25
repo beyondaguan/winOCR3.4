@@ -91,9 +91,14 @@ def test_host_cancel_terminates():
 
     t = threading.Thread(target=run)
     t.start()
-    time.sleep(0.15)                 # 让假宿主进入「朗读」(sleep)
+    # 等宿主真正启动（Popen 完成、_proc 非空）再取消，避免负载下 cancel
+    # 先于宿主启动导致竞态；启动后再留 0.15s 让假宿主进入「朗读」(sleep)。
+    deadline = time.time() + 5
+    while host._proc is None and time.time() < deadline:
+        time.sleep(0.02)
+    time.sleep(0.15)
     cancel.set()                     # 用户点取消
-    t.join(timeout=5)
+    t.join(timeout=10)
     os.environ.pop("WINOCR_FAKE_SPEAK_SEC", None)
     assert not t.is_alive(), "取消后 speak 应在超时内返回"
     assert result.get("v") is True

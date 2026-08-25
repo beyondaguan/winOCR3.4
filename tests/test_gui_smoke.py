@@ -197,9 +197,14 @@ def test_event_bus_updates_ui_from_worker_thread():
                         TranslateResult(text="ok", engine="argos"))
 
     def _check():
+        # 轮询等待回写：负载下泵的 after(40) 续期可能延迟，固定 500ms 一次
+        # 读取会偶发读到空译文。每 100ms 重读，译文到位即退出 mainloop。
         seen["translation"] = ui.window.get_translation()
         seen["status"] = ui.window.status_label.cget("text")
-        ui.root.quit()
+        if seen["translation"] == "ok":
+            ui.root.quit()
+        else:
+            ui.root.after(100, _check)
 
     def _watchdog():
         """超时保护：3s 后强制退出 mainloop，防止测试挂死。"""
@@ -207,7 +212,7 @@ def test_event_bus_updates_ui_from_worker_thread():
         ui.root.quit()
 
     threading.Thread(target=_worker, daemon=True).start()
-    ui.root.after(500, _check)
+    ui.root.after(200, _check)
     ui.root.after(3000, _watchdog)    # 3s 硬超时
     ui.root.mainloop()
     ui.root.destroy()
