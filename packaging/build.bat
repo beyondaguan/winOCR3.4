@@ -14,6 +14,11 @@ if errorlevel 1 (
     exit /b 1
 )
 
+echo [1.5/4] 裁剪未用二进制（省 ~29MB）...
+REM OpenCV 的视频 IO FFmpeg 后端（opencv_videoio_ffmpeg*.dll）只服务视频读写，
+REM WinOCR 是 OCR 工具不用视频，删除后 rapidocr 图像处理不受影响。
+if exist "dist\WinOCR\_internal\cv2\opencv_videoio_ffmpeg*.dll" del /q "dist\WinOCR\_internal\cv2\opencv_videoio_ffmpeg*.dll"
+
 echo [2/4] 复制 OCR 模型（v6_tiny + v6_medium + cls，与 exe 同级）...
 if not exist "dist\WinOCR\models" mkdir "dist\WinOCR\models"
 if exist "models\v6_tiny"   xcopy /e /i /y "models\v6_tiny"   "dist\WinOCR\models\v6_tiny"   >nul
