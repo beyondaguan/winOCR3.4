@@ -91,7 +91,7 @@ class Pipeline:
         try:
             store.append_record(rec)
         except Exception as e:
-            print(f"[持久化] 写入失败: {e}")
+            logger.warning("[持久化] 写入失败: %s", e)
 
     # ------------------------------------------------------------------
     # 知识库（数据资产闭环）

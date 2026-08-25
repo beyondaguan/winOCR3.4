@@ -13,12 +13,15 @@ Argos 离线翻译引擎 — 无 torch / 无 stanza 独立实现（移植自 Win
 """
 from __future__ import annotations
 
+import json
+import logging
 import os
 import re
-import json
 import threading
 
 from .base import TranslateEngine
+
+logger = logging.getLogger(__name__)
 
 
 # ----------------------------------------------------------------------------
@@ -164,7 +167,7 @@ class ArgosEngine(TranslateEngine):
                         pkg = _ArgosPackage(pdir)
                         self._packages[(pkg.from_code, pkg.to_code)] = pkg
                     except Exception as e:
-                        print(f"[Argos] 跳过无效模型包 {name}: {e}")
+                        logger.warning("[Argos] 跳过无效模型包 %s: %s", name, e)
             self._loaded = True
 
     def available(self) -> bool:
@@ -180,7 +183,7 @@ class ArgosEngine(TranslateEngine):
                 except Exception:
                     pass
         except Exception as e:
-            print(f"[预热] Argos 预热失败: {e}")
+            logger.warning("[预热] Argos 预热失败: %s", e)
 
     def translate(self, text: str, source: str, target: str) -> str:
         self._load_packages()
@@ -199,6 +202,6 @@ class ArgosEngine(TranslateEngine):
             try:
                 out.append(pkg.translate(line) or line)
             except Exception as e:
-                print(f"[Argos 单行翻译失败] {e}")
+                logger.warning("[Argos 单行翻译失败] %s", e)
                 out.append(line)
         return "\n".join(out)

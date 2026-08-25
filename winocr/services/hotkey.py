@@ -11,9 +11,12 @@
 """
 from __future__ import annotations
 
+import logging
 from typing import Callable, Dict, List
 
 from ..core.event_bus import EventBus, Events
+
+logger = logging.getLogger(__name__)
 
 # 动作名 → 中文显示名（P5：动作名 = 胶囊注册键，默认组合键由胶囊声明）
 ACTIONS = {
@@ -133,7 +136,7 @@ class HotkeyService:
             try:
                 handler()
             except Exception as e:
-                print(f"[热键 {action}] 回调异常: {e}")
+                logger.exception("[热键 %s] 回调异常: %s", action, e)
         return _fire
 
     def unregister_all(self) -> None:

@@ -7,11 +7,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 from typing import List, Optional
 
 from .base import Persistence
+
+logger = logging.getLogger(__name__)
 
 _MAX_RECORDS = 500          # 只保留最近 N 条，防止文件无限膨胀
 
@@ -76,7 +79,7 @@ class JsonHistory(Persistence):
                 json.dump(records, f, ensure_ascii=False, indent=2)
             os.replace(tmp, self.path)
         except Exception as e:
-            print(f"[历史] 写入失败: {e}")
+            logger.warning("[历史] 写入失败: %s", e)
             try:
                 os.remove(tmp)
             except OSError:

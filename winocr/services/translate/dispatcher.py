@@ -7,11 +7,14 @@
 """
 from __future__ import annotations
 
+import logging
 import time
 from typing import Dict, List, Optional
 
 from .base import TranslateEngine
 from ...core.types import Lang, TranslateResult
+
+logger = logging.getLogger(__name__)
 
 
 class TranslateDispatcher:
@@ -221,7 +224,7 @@ class TranslateDispatcher:
                                            engine=eng.name, elapsed=time.time() - t0)
             except Exception as e:
                 errors.append(f"{eng.display_name}: {e}")
-                print(f"[翻译回退] {eng.display_name} 失败：{e}")
+                logger.warning("[翻译回退] %s 失败：%s", eng.display_name, e)
 
         # 全线失败：返回原文并把原因带出去，UI 可以告诉用户到底怎么了
         return TranslateResult(text=text, source_lang=source, target_lang=tgt,

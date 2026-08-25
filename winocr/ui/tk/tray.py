@@ -9,9 +9,12 @@
 """
 from __future__ import annotations
 
+import logging
 import threading
 from pathlib import Path
 from typing import Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 
 def _icon_path() -> Optional[str]:
@@ -82,7 +85,7 @@ class TrayIcon:
                     self._thread = None
             return True
         except Exception as e:
-            print(f"[托盘] 启动失败（忽略，继续用隐藏窗口常驻）: {e}")
+            logger.warning("[托盘] 启动失败（忽略，继续用隐藏窗口常驻）: %s", e)
             return False
 
     def stop(self) -> None:

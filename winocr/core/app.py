@@ -13,6 +13,7 @@ run.py、各 dialog 的保存函数里，改一处极易漏一处（配置改了
 """
 from __future__ import annotations
 
+import logging
 from typing import Dict, Optional
 
 from .config import AppConfig
@@ -20,6 +21,8 @@ from .event_bus import EventBus, Events
 from .paths import plugins_dir
 from .pipeline import Pipeline
 from .registry import PluginRegistry, default_registry, register_plugin_dir
+
+logger = logging.getLogger(__name__)
 
 
 class App:
@@ -173,7 +176,8 @@ class App:
         if cls is None:                      # 配置写错了也要能启动
             for name, c in self.discovered["ocr"].items():
                 cls = c
-                print(f"[App] OCR 引擎 '{self.config.ocr.engine}' 未找到，回退到 '{name}'")
+                logger.warning("[App] OCR 引擎 '%s' 未找到，回退到 '%s'",
+                               self.config.ocr.engine, name)
                 break
         if cls is None:
             return None
@@ -274,7 +278,7 @@ class App:
                     self._configure_ai(ai)
                     self.services["ai"] = ai
             except Exception as e:
-                print(f"[配置] AI 提供方切换失败，沿用当前：{e}")
+                logger.warning("[配置] AI 提供方切换失败，沿用当前：%s", e)
         if ai is not None:
             self._configure_ai(ai)
 
@@ -294,7 +298,7 @@ class App:
             try:
                 self.config.save()
             except Exception as e:
-                print(f"[配置] 保存失败: {e}")
+                logger.warning("[配置] 保存失败: %s", e)
         self.bus.publish(Events.CONFIG_CHANGED, self.config)
 
     def start_hotkeys(self, handlers: dict, defaults: dict = None) -> bool:
@@ -345,7 +349,7 @@ class App:
         if self.ui is not None:
             self.ui.run()
         else:
-            print("[App] 未挂载 UI 适配器（无界面模式）")
+            logger.info("[App] 未挂载 UI 适配器（无界面模式）")
 
     def shutdown(self) -> None:
         if self.hotkeys is not None:

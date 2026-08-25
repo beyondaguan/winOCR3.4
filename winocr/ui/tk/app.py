@@ -37,6 +37,8 @@ from ...services.capture.selection import (
 # 日志收口（P2-9）：按需初始化 winocr.selection 日志；WINOCR_DEBUG=1 时全量 DEBUG。
 _ensure_sel_logging()
 
+logger = logging.getLogger(__name__)
+
 
 def _sel_log_static(msg: str, level: int = logging.DEBUG) -> None:
     """取词域诊断日志。默认 DEBUG（生产静默）；可传 level 升级为 WARNING/ERROR。
@@ -231,7 +233,7 @@ class TkUi(UiAdapter):
             if self._tray.start():
                 _sel_log_static("tray icon enabled", logging.INFO)
         except Exception as e:
-            print(f"[托盘] 初始化失败（忽略）: {e}")
+            logger.warning("[托盘] 初始化失败（忽略）: %s", e)
 
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
         self._start_pump()                   # 主线程启动跨线程 UI 队列泵
@@ -269,7 +271,7 @@ class TkUi(UiAdapter):
             from .dialogs import open_first_run
             open_first_run(self.window)
         except Exception as e:
-            print(f"[首次运行向导] 弹出失败: {e}")
+            logger.warning("[首次运行向导] 弹出失败: %s", e)
 
     def _setup_style(self) -> None:
         cfg = self.app.config

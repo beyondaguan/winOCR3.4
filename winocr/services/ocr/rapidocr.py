@@ -15,6 +15,7 @@
 """
 from __future__ import annotations
 
+import logging
 import threading
 from collections import Counter
 from typing import Optional, Tuple
@@ -23,6 +24,8 @@ from .base import OcrEngine
 from .structure import clean_text
 from ...core.paths import ocr_model_dir
 from ...core.types import OcrResult
+
+logger = logging.getLogger(__name__)
 
 # 低于此体积的 .onnx 视为占位符 / 下载残缺
 _MIN_VALID_MODEL_SIZE = 100 * 1024
@@ -148,7 +151,7 @@ class RapidOcrEngine(OcrEngine):
         """
         tier = self._effective_tier()
         if tier != self.model_type and self.model_type in self._OCR_TIERS:
-            print(f"[RapidOCR] 模型档位 {self.model_type} 未安装，已回退 tiny")
+            logger.warning("[RapidOCR] 模型档位 %s 未安装，已回退 tiny", self.model_type)
         if tier not in self._models_cache:
             self._models_cache[tier] = self._find_models(tier)
         return self._models_cache[tier]
@@ -210,7 +213,7 @@ class RapidOcrEngine(OcrEngine):
             self._get_engine()
             return True
         except Exception as e:
-            print(f"[RapidOCR 预热失败] {e}")
+            logger.warning("[RapidOCR 预热失败] %s", e)
             return False
 
     # ------------------------------------------------------------------
@@ -224,7 +227,7 @@ class RapidOcrEngine(OcrEngine):
         try:
             items = self._run(image)
         except Exception as e:
-            print(f"[RapidOCR 识别失败] {e}")
+            logger.warning("[RapidOCR 识别失败] %s", e)
             return OcrResult(engine=self.name)
 
         result = self._build_result(image, items)
@@ -238,11 +241,11 @@ class RapidOcrEngine(OcrEngine):
                     items2 = self._run_with_tier(image, higher)
                     result2 = self._build_result(image, items2)
                     if result2.confidence > result.confidence:
-                        print(f"[RapidOCR] 低置信度 {result.confidence:.2f} → "
-                              f"升档 {higher} 重试，置信度 {result2.confidence:.2f}")
+                        logger.info("[RapidOCR] 低置信度 %.2f → 升档 %s 重试，置信度 %.2f",
+                                    result.confidence, higher, result2.confidence)
                         result = result2
                 except Exception as e:
-                    print(f"[RapidOCR] 升档重试失败（忽略，用原结果）: {e}")
+                    logger.warning("[RapidOCR] 升档重试失败（忽略，用原结果）: %s", e)
         return result
 
     def _run_with_tier(self, image, tier: str):
@@ -295,7 +298,7 @@ class RapidOcrEngine(OcrEngine):
                 if md:
                     text = md
             except Exception as e:
-                print(f"[RapidOCR 结构化失败，回退纯文字] {e}")
+                logger.warning("[RapidOCR 结构化失败，回退纯文字] %s", e)
         return OcrResult(
             text=text,
             lines=lines,

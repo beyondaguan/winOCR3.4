@@ -11,8 +11,11 @@
 """
 from __future__ import annotations
 
+import logging
 import threading
 from typing import Callable, Dict, List
+
+logger = logging.getLogger(__name__)
 
 
 class EventBus:
@@ -55,7 +58,7 @@ class EventBus:
             try:
                 h(payload)
             except Exception as e:      # 订阅者异常绝不冒泡回发布者
-                print(f"[事件总线] 处理器异常 ({event}): {e}")
+                logger.exception(f"[事件总线] 处理器异常 ({event}): {e}")
 
     def clear(self) -> None:
         with self._lock:

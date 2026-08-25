@@ -332,7 +332,7 @@ class AppConfig:
             raw = _read_toml(p)
             cfg = cls.from_dict(raw)
         except Exception as e:
-            print(f"[配置] 解析失败，使用默认值：{e}")
+            logger.warning("[配置] 解析失败，使用默认值：%s", e)
             cfg = cls.defaults()
         cfg._source_path = p
         cfg._apply_env_overrides()

@@ -11,10 +11,13 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import logging
 import pkgutil
 import sys
 from pathlib import Path
 from typing import Dict, List, Type, TypeVar
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -76,7 +79,7 @@ class PluginRegistry:
             try:
                 mod = importlib.import_module(mod_name)
             except Exception as e:
-                print(f"[插件跳过] {mod_name}: {e}")
+                logger.warning("[插件跳过] %s: %s", mod_name, e)
                 continue
             for _, obj in inspect.getmembers(mod):
                 if (
