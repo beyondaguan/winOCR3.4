@@ -41,6 +41,16 @@
 - `open_knowledge` 面板新增「所有项目」复选框，`knowledge.search` 支持 `project="*"`
   跨项目查询；修复前向引用（按钮 command 引用未定义函数）与 Treeview iid 越界问题。
 
+### 分发体积优化
+
+- **已落地**：`build.bat` 裁剪 OpenCV 视频 FFmpeg 后端（`_internal\cv2\opencv_videoio_ffmpeg*.dll`，
+  省 ~29MB）。WinOCR 是 OCR 工具不用视频读写，rapidocr 图像处理不受影响。
+- **保留（用户决策）**：`v6_medium` OCR 模型（133MB，OCR 智能升档需要）与 `pymupdf`
+  PDF 附件（43MB）均不裁剪。
+- **体积构成**（3.4.16 分发 ~703MB）：`_internal` 387MB（cv2 112 / ctranslate2 59 /
+  pymupdf 43 / onnxruntime 35 / rapidocr 31）+ `vendor` 176MB（Argos 中英互译模型）+
+  `models` 140MB（v6_medium 133 + v6_tiny 6.6）+ exe 0.6MB。裁剪后 ~674MB。
+
 ### 修改文件清单
 
 | 文件 | 改动 |
