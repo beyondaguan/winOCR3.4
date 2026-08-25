@@ -2,7 +2,7 @@
 
 截图识字 / 离线翻译 / AI 解读 —— 插件化重构版（**当前版本：3.4.19**）。
 
-纯 Python + Tkinter，无框架。离线 OCR 模型 + Argos 中英离线翻译已内置，断网也能完整运行。
+纯 Python + Tkinter，无框架。离线 OCR 模型 + Argos 中英离线翻译，断网也能完整运行。
 
 > **文档入口**：技术架构、从零复现、配置系统、插件机制、打包分发、使用说明、测试与决策结论，全部在
 > **[`DOC/WinOCR3.4文档总览.md`](DOC/WinOCR3.4文档总览.md)**。版本里程碑见 [`CHANGELOG.md`](CHANGELOG.md)。
@@ -14,6 +14,12 @@
 setup.bat          :: 创建 .venv、装依赖、自检
 run.bat            :: 启动图形界面
 ```
+
+> 从 **GitHub 源码 zip** 安装时，`.venv` 装好后先跑一次模型下载再启动
+> （`setup.bat`/`run.bat` 已覆盖本地分发版内置模型，跳过此步）：
+> ```cmd
+> .venv\Scripts\python.exe tools\download_ocr_model.py tiny
+> ```
 
 或手动：
 
@@ -31,7 +37,12 @@ python -m venv .venv
 .venv\Scripts\python.exe main.py             :: 启动 GUI
 ```
 
-模型文件已内置在仓库（`models/v6_tiny/` 约 7MB、`vendor/argos_packages/` 约 164MB），无需联网下载。
+> **模型获取**：`models/`（OCR 模型）与 `vendor/`（离线翻译包）因体积原因**不进 GitHub 仓库**，需按需下载。
+> OCR 模型下载脚本：`python tools/download_ocr_model.py [tiny|medium]`（默认档位 tiny）。
+> - `tiny`（约 7MB，默认）与 `medium`（约 133MB，智能升档）从 ModelScope 官方仓库下载，带 SHA256 校验；
+> - `small` 模型随 rapidocr pip 包自带，零下载；
+> - 离线翻译包需自行放入 `vendor/argos_packages/`（见 DOC 文档）。
+> 下载完成后运行 `python main.py doctor` 自检确认模型可用。
 
 ## 默认热键
 

@@ -5,6 +5,16 @@
 > 正式发版：把 3.4.18 之后的工程化重构统一归档到 3.4.19，版本号与 CHANGELOG /
 > version.py 对齐。全量 **146 项测试通过**，`main.py doctor` 正常。
 
+### 修复：GitHub 源码缺模型导致「不能截图不能 OCR」
+
+- **现象**：从 GitHub 下载的 3.4.19 源码 zip 不包含 `models/` 与 `vendor/`
+  （体积原因被 `.gitignore` 排除），默认档位 `tiny` 模型缺失 → OCR 引擎无法初始化。
+- **根因**：`tools/download_ocr_model.py` 只支持 `small`/`medium`，不支持默认档位
+  `tiny`；且 README / DOC 误导性声称「模型已内置在仓库，无需联网下载」。
+- **改法**：下载脚本补齐 `tiny` 档位（det/rec/cls，ModelScope 官方源，SHA256 校验）；
+  文档如实改为「GitHub 源码不含大文件，需按需下载」。
+- **验证**：`tools/download_ocr_model.py tiny` 实测 3/3 就绪，SHA256 全通过。
+
 ### 代码一致性：裸 print() 统一收敛到 logging
 
 - 22 处裸 `print()` 替换为 `logging` 调用（事件总线异常、插件跳过、OCR 引擎回退、

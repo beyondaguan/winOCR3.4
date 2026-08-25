@@ -9,7 +9,7 @@ Pillow>=9.0.0
 
 # ---- OCR 轴（rapidocr 插件）----
 # PP-OCRv6 需要 ONNX IR version 10，故 onnxruntime >= 1.23.2
-# 模型已内置在 models/v6_tiny/，首次运行零联网
+# tiny/medium 模型用 tools/download_ocr_model.py 获取（GitHub 源码不含）；small 随 rapidocr 自带
 numpy>=1.20.0
 onnxruntime>=1.23.2
 rapidocr>=3.9.0

@@ -31,7 +31,7 @@ Windows 桌面工具：**截图识字（OCR）→ 翻译 → AI 解读**。纯 P
 | 架构 | 六轴插件化 + 组合根依赖注入 + 事件总线 |
 | 配置 | 单一 TOML（`~/.winocr/config.toml` 或便携模式项目根 `config.toml`） |
 | 核心依赖 | Pillow / rapidocr / onnxruntime / ctranslate2 / sentencepiece / langid（其余可选） |
-| 离线能力 | 内置 OCR 模型（`models/v6_tiny` 约 7MB + `models/v6_medium` 约 133MB）+ Argos 中英互译包（`vendor/argos_packages`，约 164MB） |
+| 离线能力 | 本地分发版内置 OCR 模型（`models/v6_tiny` 约 7MB + `models/v6_medium` 约 133MB）+ Argos 中英互译包（`vendor/argos_packages`，约 164MB）；GitHub 源码仓库不含这些大文件，需按上方「模型获取」下载 |
 | 测试 | pytest，**119 用例全过** |
 | 入口 | `main.py`（gui / console / doctor / models / config / ocr 六个子命令） |
 
@@ -56,15 +56,16 @@ run.bat                        :: 或 .venv\Scripts\python.exe main.py
 
 **依赖分层**：`Pillow` 唯一必需；`numpy/onnxruntime/rapidocr` 只服务 OCR 轴；`ctranslate2/sentencepiece` 只服务 argos 轴；`langid` 只服务翻译源语言检测。缺哪个只有那一轴不可用，程序照常启动。`doctor` 子命令专为验证这一点设计。
 
-**模型文件已内置在仓库**，不需要联网下载：
+**模型获取**：`models/`（OCR 模型）与 `vendor/`（离线翻译包）因体积原因**不进 GitHub 仓库**，需按需下载：
 
-| 资源 | 位置 | 内容 |
+| 资源 | 位置 | 获取方式 |
 |---|---|---|
-| OCR 模型 | `models/v6_tiny/` | PP-OCRv6 tiny 三个 onnx（det 1.8MB / rec 4.5MB / cls 0.6MB） |
-| OCR 模型（可选） | `models/v6_medium/` | PP-OCRv6 medium 三件套，智能升档用 |
-| Argos 翻译包 | `vendor/argos_packages/` | `translate-zh_en-1_9/`、`translate-en_zh-1_9/`（双向中英） |
+| OCR 模型 | `models/v6_tiny/` | `python tools/download_ocr_model.py tiny`（约 7MB，默认档位） |
+| OCR 模型（可选） | `models/v6_medium/` | `python tools/download_ocr_model.py medium`（约 133MB，智能升档用） |
+| Argos 翻译包 | `vendor/argos_packages/` | 自行下载放入（见下方说明） |
 
-> OCR 的 `v6_small` 档由 rapidocr pip 包**自带**，零下载即可用；`v6_medium` 由 `tools/download_ocr_model.py medium` 获取（ModelScope 官方仓库，带 SHA256 校验）。
+> OCR 的 `v6_small` 档由 rapidocr pip 包**自带**，零下载即可用。全部档位均可由 `tools/download_ocr_model.py [tiny|small|medium]` 获取（ModelScope `RapidAI/RapidOCR` 官方仓库，带 SHA256 校验）。
+> Argos 离线翻译包不进仓库：将 `translate-zh_en-1_9/`、`translate-en_zh-1_9/` 放入 `vendor/argos_packages/` 即生效（或放 `~/.local/share/argos-translate/packages/`）。
 > PP-OCRv6 需要 ONNX IR version 10 → `onnxruntime>=1.23.2`（requirements.txt 已注明）。
 
 ---
@@ -184,7 +185,7 @@ vendor/argos_packages/translate-zh_en-1_9/
 
 **搜索目录顺序**（`core/paths.py::argos_search_dirs`）：环境变量 `ARGOS_PACKAGES_DIR` → 用户目录 `~/.winocr/models/argos` → 项目 `vendor/argos_packages` → argos 官方默认位置。先找到先用。
 
-来源：Argos Translate 官方语言包（`argosopentech`），下载 `translate-zh_en`、`translate-en_zh` 的 `.argosmodel` 包解压后放入，或装 `argos-translate` 后 `argospm install translate-zh_en`。仓库内置为 1.9。
+来源：Argos Translate 官方语言包（`argosopentech`），下载 `translate-zh_en`、`translate-en_zh` 的 `.argosmodel` 包解压后放入，或装 `argos-translate` 后 `argospm install translate-zh_en`。本地分发版内置为 1.9。
 
 ### 5.4 大模型翻译 glm/hunyuan：OpenAI 兼容客户端
 
@@ -412,7 +413,7 @@ run.bat            :: 启动图形界面
 
 - **热键无效？** `keyboard` 全局热键需管理员权限；失败时窗口内按钮仍可直接操作。Alt+字母快捷键已整体移除（防误触）。
 - **首次识别慢？** 后台自动预热 ONNX 模型，通常无感知；仍慢可换 `model_type = "tiny"`。
-- **完全离线能用吗？** 能。OCR 模型已内置，翻译用 `argos` 引擎，无需网络。
+- **完全离线能用吗？** 能。OCR 模型本地可用（GitHub 源码需先跑 `tools/download_ocr_model.py tiny` 获取模型初装，一次性联网；之后完全离线），翻译用 `argos` 引擎（语言包放入 `vendor/argos_packages/`），无需网络。
 - **API Key 安全吗？** 存本地 `config.toml` 明文；环境变量 `GLM_API_KEY` 可临时覆盖，免落盘。
 - **中文原文先「译英」再点「译中」没反应？** 已修：用户显式点击时目标语言不会被偷偷改向；若原文已是目标语种，系统自动改翻译文区（回译）。
 - **译文区为什么可编辑？** 让人当场改错字/机翻生硬处再复制，比「只读→粘到别处改」顺手；支持 `Ctrl+A`、右键、撤销。
@@ -482,7 +483,7 @@ python main.py ocr 图片.png -t zh-CN   # 命令行识别并翻译
 | 版本 | 核心变化 |
 |---|---|
 | 2.x | OCR 统一 RapidOCR、Argos 无 torch 实现、AI 对话雏形、热键设置；全局状态机易死锁 |
-| 3.0.0（2026-08-11） | **六轴插件化 + 组合根 + 事件总线**：根治死锁；单一 TOML 配置；UI 契约化；内置离线模型；移除 Win7/pyperclip/config_local.py |
+| 3.0.0（2026-08-11） | **六轴插件化 + 组合根 + 事件总线**：根治死锁；单一 TOML 配置；UI 契约化；内置离线模型；移除 Win7/pyperclip/config_local.py（注：GitHub 源码不含 models/vendor，需按「模型获取」下载） |
 | 3.1.0（2026-08-13） | **API 连接抽象**：`[api.*]` 连接表 + 功能引用连接名 + 旧配置自动迁移 + 字段级继承；设置界面重写；Alt 快捷键移除；单实例锁；tkinterdnd2 拖放 |
 | 3.4.0–3.4.11 | 功能视角重构（各功能自持连接参数）、UI 收敛 Tk、回退链 edge→OneCore→SAPI5；划词并发修复：独立工作线程、即时弹窗、`post()` 队列泵根治刷新、贴图回填、兜底取词 |
 | 3.4.12 | P1 七项：取词服务抽取+单测/CI/热键降级/UI 守卫/任务取消/AI 历史落地 |
@@ -548,9 +549,10 @@ WinOCR3.4/
 │   │       ├── color_picker.py   # 屏幕取色器
 │   │       └── tray.py           # 系统托盘（可选 pystray）
 │   └── version.py                # 版本号单一真相来源
-├── models/v6_tiny/               # 内置 OCR 模型
-├── models/v6_medium/             # 可选 OCR 模型（智能升档用）
-├── vendor/argos_packages/        # 内置离线翻译包
+├── models/                        # OCR 模型目录（GitHub 源码不含，用 tools/download_ocr_model.py 获取）
+│   ├── v6_tiny/                   # 默认档位，约 7MB
+│   └── v6_medium/                 # 可选档位（智能升档用），约 133MB
+├── vendor/argos_packages/         # 离线翻译包目录（GitHub 源码不含，自行放入）
 ├── plugins/capsules/             # 第三方场景胶囊（自动发现）
 └── tests/                        # 冒烟测试（119 用例）
 ```
