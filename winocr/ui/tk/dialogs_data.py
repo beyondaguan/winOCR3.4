@@ -575,7 +575,7 @@ def open_history(window) -> None:
 
     def _export(fmt: str) -> None:
         from tkinter import filedialog
-        from ..services.persistence.json_history import export_markdown, export_text
+        from ...services.persistence.json_history import export_markdown, export_text
         path = filedialog.asksaveasfilename(
             parent=win, title=f"导出历史（{fmt.upper()}）",
             defaultextension=f".{fmt}",
