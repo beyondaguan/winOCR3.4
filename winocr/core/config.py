@@ -77,6 +77,11 @@ class OcrConfig(ConnectableConfig):
     # --- 智能档位（P1-2）：低置信度自动升一档重试，取更优结果 ---
     auto_upgrade: bool = True        # True = 识别置信度低于阈值时自动升档重试一次
     upgrade_threshold: float = 0.5   # 低于该置信度才触发升档（0~1）
+    # --- 段落/行判定模式（A / B / A+B，供对比测试）---
+    # "A"   = 仅数据驱动自适应行分组（修阅读顺序，不分段，纯 lines）
+    # "B"   = 仅四角几何段落判定（行分组退回旧固定阈值，隔离 B 的效果）
+    # "A+B" = 自适应行分组 + 四角几何段落（推荐，默认）
+    paragraph_mode: str = "A+B"
 
 
 @dataclass

@@ -67,6 +67,8 @@ class OcrResult:
     boxes: list = field(default_factory=list)       # 全部识别项的四点框（按行内阅读序）
     line_boxes: list = field(default_factory=list)  # 每行一个列表：该行各识别项的框（几何重排用）
     line_items: list = field(default_factory=list)  # 每行一个列表：该行各识别项文本（分列/表格用）
+    paragraphs: List[str] = field(default_factory=list)  # 段落列表：段内行以 \n 连接
+    para_ids: List[int] = field(default_factory=list)    # 与 lines 对齐，每行所属段落 id
     engine: str = ""
     confidence: float = 0.0
     elapsed: float = 0.0

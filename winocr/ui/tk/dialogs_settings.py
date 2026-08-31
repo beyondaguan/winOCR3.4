@@ -295,10 +295,22 @@ def open_api_settings(window) -> None:
     ttk.Checkbutton(p3.body, text="低置信度自动升档重试（识别模糊时自动用更高精度档再试一次）",
                     variable=auto_up).grid(row=7, column=0, sticky=tk.W)
 
+    # 段落 / 行判定模式：A / B / A+B（三选一，供对比测试；不绑快捷键）
+    ttk.Label(p3.body, text="段落 / 行判定模式",
+              font=theme.UI_FONT_BOLD).grid(row=8, column=0, sticky=tk.W, pady=(8, 2))
+    para_mode = tk.StringVar(value=getattr(o, "paragraph_mode", "A+B"))
+    _pm_row = ttk.Frame(p3.body)
+    _pm_row.grid(row=9, column=0, sticky=tk.W, pady=(0, 6))
+    for _val, _lab in (("A", "A  仅行分组"),
+                       ("B", "B  仅几何段落"),
+                       ("A+B", "A+B  行分组+段落（推荐）")):
+        ttk.Radiobutton(_pm_row, text=_lab, variable=para_mode, value=_val
+                        ).pack(side=tk.LEFT, padx=(0, 14))
+
     # 各档位模型安装状态：未安装的档位标注出来，避免误以为用了该档
     tier_state = ttk.Label(p3.body, text="", foreground=theme.TEXT_MUTED,
                            font=theme.UI_FONT_SMALL)
-    tier_state.grid(row=8, column=0, sticky=tk.W, pady=(0, 4))
+    tier_state.grid(row=10, column=0, sticky=tk.W, pady=(0, 4))
     _ocr_svc = app.services.get("ocr")
     if _ocr_svc is not None and hasattr(_ocr_svc, "model_availability"):
         try:
@@ -308,15 +320,15 @@ def open_api_settings(window) -> None:
         except Exception:
             pass
 
-    ttk.Separator(p3.body, orient=tk.HORIZONTAL).grid(row=9, column=0, sticky=tk.EW, pady=12)
+    ttk.Separator(p3.body, orient=tk.HORIZONTAL).grid(row=11, column=0, sticky=tk.EW, pady=12)
     ttk.Label(p3.body, text="云端视觉 OCR（OpenAI 兼容视觉模型；留空地址/密钥 = 关闭，仅本地识别）",
-              font=theme.UI_FONT_BOLD).grid(row=10, column=0, columnspan=4,
+              font=theme.UI_FONT_BOLD).grid(row=12, column=0, columnspan=4,
                                            sticky=tk.W, pady=(2, 4))
     ttk.Label(p3.body, text="本功能直接用自己的一套连接参数，不再引用「平台账号」页。",
               foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL
-              ).grid(row=11, column=0, columnspan=4, sticky=tk.W)
+              ).grid(row=13, column=0, columnspan=4, sticky=tk.W)
     ocr_body = ttk.Frame(p3.body)
-    ocr_body.grid(row=12, column=0, columnspan=4, sticky=tk.EW, pady=(4, 0))
+    ocr_body.grid(row=14, column=0, columnspan=4, sticky=tk.EW, pady=(4, 0))
     ocr_v = _make_conn_editor(ocr_body, cfg.ocr, vision=True)
 
     ocr_test_lbl = ttk.Label(p3.body, text="", foreground=theme.TEXT_MUTED,
@@ -717,6 +729,7 @@ def open_api_settings(window) -> None:
             o.model_type = mt.get()
             o.structured = struct.get()
             o.auto_upgrade = auto_up.get()
+            o.paragraph_mode = para_mode.get()
         except ValueError:
             messagebox.showwarning("参数错误", "翻译 / OCR 参数必须是数字", parent=win)
             return

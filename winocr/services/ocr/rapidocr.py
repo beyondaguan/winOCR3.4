@@ -47,6 +47,7 @@ class RapidOcrEngine(OcrEngine):
         self.structured: bool = False      # 几何重建表格/版面（离线，零额外模型）
         self.auto_upgrade: bool = True     # 低置信度自动升档重试
         self.upgrade_threshold: float = 0.5
+        self.paragraph_mode: str = "A+B"   # A=仅行分组 / B=仅几何段落 / A+B=两者结合
         self._models_cache: dict = {}      # {tier: (det,rec,cls)}；配置变更后失效
 
     def configure(self, **kwargs) -> None:
@@ -61,6 +62,8 @@ class RapidOcrEngine(OcrEngine):
         self.structured = config.structured
         self.auto_upgrade = config.auto_upgrade
         self.upgrade_threshold = config.upgrade_threshold
+        mode = getattr(config, "paragraph_mode", "A+B")
+        self.paragraph_mode = mode if mode in ("A", "B", "A+B") else "A+B"
         self._models_cache.clear()
 
     # ------------------------------------------------------------------
@@ -228,6 +231,10 @@ class RapidOcrEngine(OcrEngine):
     # ------------------------------------------------------------------
     # 识别
     # ------------------------------------------------------------------
+    # 低置信离群项的硬阈值：低于即视为「鬼字/丢段」，触发升档 / 直接丢弃
+    # 经验值：tiny 在中文新闻 OCR 上对正常行的最低也 >0.9，鬼字/错段 <0.6
+    _OUTLIER_SCORE = 0.60
+
     def recognize(self, image) -> OcrResult:
         if image is None:
             return OcrResult(engine=self.name)
@@ -239,23 +246,61 @@ class RapidOcrEngine(OcrEngine):
             logger.warning("[RapidOCR 识别失败] %s", e)
             return OcrResult(engine=self.name)
 
+        # ---- 离群鬼字拦截 ----
+        # tiny 档对中文竖排/低对比度小图的「鬼字」（如「阳美重工…」）
+        # 自信度往往 ~0.55，远低于正常行的 0.95+；均值被平均后还在 0.9+，
+        # 旧版 `confidence < upgrade_threshold` 永远不会触发。
+        # 先按 hard-threshold 过滤掉这种废项，叠加「存在低分项就升档」双保险。
+        items, dropped = self._drop_outlier_items(items)
+        if dropped:
+            logger.info("[RapidOCR] 丢弃 %d 个低分鬼字项 (score<%.2f)",
+                        dropped, self._OUTLIER_SCORE)
+
         result = self._build_result(image, items)
 
-        # ---- 智能档位（P1-2）：低置信度 → 升一档重试，取更优结果 ----
-        # 触发条件：启用 + 当前档非最高 + 有可用更高档 + 置信度低于阈值
-        if self.auto_upgrade and result.confidence < self.upgrade_threshold:
+        # ---- 智能档位（P1-2）：低置信度 OR 检出离群 → 升档重试 ----
+        # 触发条件：启用 + 当前档非最高 + 有可用更高档
+        #   平均置信度低于阈值（兼容旧版，捕获 obvious 全图低质量场景）
+        #   OR 检测到低分离群项（tiny 出鬼字的典型特征——总分 0.95 但有 1-2 项 <0.6）
+        need_upgrade = (
+            self.auto_upgrade
+            and (result.confidence < self.upgrade_threshold or dropped > 0)
+        )
+        if need_upgrade:
             higher = self._next_available_tier(self._effective_tier())
             if higher:
                 try:
-                    items2 = self._run_with_tier(image, higher)
+                    # 注意：升档重试时不要再丢鬼字（更高档很少出鬼字，且重复过滤浪费时间）
+                    raw_items2 = self._run_with_tier(image, higher)
+                    items2, _ = self._drop_outlier_items(raw_items2)
                     result2 = self._build_result(image, items2)
-                    if result2.confidence > result.confidence:
-                        logger.info("[RapidOCR] 低置信度 %.2f → 升档 %s 重试，置信度 %.2f",
-                                    result.confidence, higher, result2.confidence)
+                    if result2.confidence >= result.confidence:
+                        logger.info("[RapidOCR] %s → 升档 %s 重试，置信度 %.2f → %.2f",
+                                    f"低分离群 {dropped} 项" if dropped else f"低置信度 {result.confidence:.2f}",
+                                    higher, result.confidence, result2.confidence)
                         result = result2
                 except Exception as e:
                     logger.warning("[RapidOCR] 升档重试失败（忽略，用原结果）: %s", e)
         return result
+
+    def _drop_outlier_items(self, items):
+        """过滤掉 score 明显低于正常水平的「鬼字」识别项。
+
+        tiny 在中文新闻OCR上对正常行的 score 一般 ≥0.90，鬼字往往 ≤0.60。
+        取正常中位数（去掉可能存在的低分离群后），差值超过 0.30 即判离群。
+        返回 (filtered_items, dropped_count)。"""
+        if not items:
+            return items, 0
+        scores = sorted(float(s) for _, _, s in items if s)
+        if len(scores) < 3:                       # 项太少不传谣于离群判断
+            return items, 0
+        # 用上四分位（Q3）作「正常水平」，避免被少量低分离群拉偏
+        q3 = scores[int(len(scores) * 0.75)]
+        threshold = min(self._OUTLIER_SCORE, q3 - 0.30)
+        if threshold <= 0:
+            return items, 0
+        kept = [it for it in items if float(it[2]) >= threshold]
+        return kept, len(items) - len(kept)
 
     def _run_with_tier(self, image, tier: str):
         """用指定档位临时识别：换档 → 跑 → 还原档位与引擎缓存。
@@ -294,10 +339,99 @@ class RapidOcrEngine(OcrEngine):
             out[t] = det is not None and rec is not None
         return out
 
+    @staticmethod
+    def _line_geom(line_boxes, lines):
+        """从每行的多个四点框还原整行几何量（x0/x1/y0/y1）。"""
+        geom = []
+        for boxes, text in zip(line_boxes, lines):
+            if not boxes:
+                geom.append({"x0": 0, "x1": 0, "y0": 0, "y1": 0, "text": text})
+                continue
+            xs = [p[0] for b in boxes for p in b]
+            ys = [p[1] for b in boxes for p in b]
+            geom.append({"x0": min(xs), "x1": max(xs),
+                         "y0": min(ys), "y1": max(ys), "text": text})
+        return geom
+
+    @staticmethod
+    def _detect_paragraphs(lines_geom, img_w, img_h):
+        """段落层（B 法）：在 A 的行分组之上判定自然段落。
+
+        判定（满足任一即新段）：
+          1) 与上一行垂直间隙 ≥ 行距众数 × 1.8（段距明显大于行距）；
+          2) 本行 left 相对段落左边界明显缩进（中文首行缩进 2 字符，段间无垂直间隙）。
+        行距众数用相邻行间隙的「中位数」近似（双峰分布里中位数落在小峰=行距），
+        比取最小值更抗离群（菜单密集处不会把阈值带偏）。
+        """
+        n = len(lines_geom)
+        if n == 0:
+            return []
+
+        gaps = [lines_geom[i]["y0"] - lines_geom[i - 1]["y1"] for i in range(1, n)]
+        pos = sorted(g for g in gaps if g > 0)
+        if len(pos) >= 5:
+            # 间隙双峰（行距小峰 + 段距大峰）：取下半部的中位数当行距，
+            # 比全局中位数更稳——样本多时不会误取段落大间隙。
+            lower = pos[: len(pos) // 2]
+            modal = lower[len(lower) // 2]
+        else:
+            # 样本少（≤4 行）：直接取最小正间隙当行距（最紧凑即行距）。
+            modal = pos[0] if pos else max(6.0, img_h * 0.02)
+        para_gap = max(modal * 1.8, 6.0)          # 段距 = 行距的 1.8 倍以上
+        indent_thr = max(8.0, img_w * 0.025)      # 首行缩进阈值（约 2 字符宽）
+
+        para_ids = [0] * n
+        para_left = lines_geom[0]["x0"]
+        pid = 0
+        for i in range(n):
+            cur = lines_geom[i]
+            if i > 0:
+                prev = lines_geom[i - 1]
+                gap = cur["y0"] - prev["y1"]
+                new_para = (gap >= para_gap
+                            or cur["x0"] - para_left >= indent_thr)
+                # 跟随当前段左边界（回到段落左缘时更新参考）
+                if not new_para and abs(cur["x0"] - para_left) <= indent_thr * 0.5:
+                    para_left = cur["x0"]
+                if new_para:
+                    pid += 1
+                    para_left = cur["x0"]
+            para_ids[i] = pid
+        return para_ids
+
     def _build_result(self, image, items) -> OcrResult:
-        lines, line_boxes, line_items = self._group_by_lines(items)
+        mode = self.paragraph_mode
+        # 行分组层（A 法）：
+        #   A / A+B → 数据驱动自适应阈值（稳健，推荐）
+        #   B      → 退回旧固定阈值(12px)，以此隔离 A 的效果，便于对比
+        if mode == "B":
+            lines, line_boxes, line_items = self._group_by_lines(items, y_threshold=12)
+        else:
+            lines, line_boxes, line_items = self._group_by_lines(items)
         scores = [s for _, _, s in items if s]
-        text = "\n".join(lines)
+
+        # ---- 段落层（B 法）：四角几何（行距众数 ×1.8 + 首行缩进）把行聚成段落 ----
+        #   A     模式：不跑段落判定，text 为平铺 lines（仅修阅读顺序，无分段）
+        #   B/A+B 模式：在行之上判定自然段落，text 用 \n\n 分段
+        para_ids: list = []
+        paragraphs: list = []
+        if mode != "A" and line_boxes:
+            img_w = getattr(image, "width", 0) or 0
+            img_h = getattr(image, "height", 0) or 0
+            line_geom = self._line_geom(line_boxes, lines)
+            para_ids = self._detect_paragraphs(line_geom, img_w, img_h)
+            # 按 para_id 聚合成段落（段内行以 \n 连接）
+            buf, cur = [], -2
+            for ln, pid in zip(lines, para_ids):
+                if pid != cur:
+                    if buf:
+                        paragraphs.append("\n".join(buf))
+                    buf, cur = [], pid
+                buf.append(ln)
+            if buf:
+                paragraphs.append("\n".join(buf))
+
+        text = "\n\n".join(paragraphs) if paragraphs else "\n".join(lines)
         # 结构化输出：用原始包围框几何重建 Markdown 表格（HushSnap 式，离线）
         if self.structured and items:
             try:
@@ -314,6 +448,8 @@ class RapidOcrEngine(OcrEngine):
             boxes=[b for b, _, _ in items],
             line_boxes=line_boxes,
             line_items=line_items,
+            paragraphs=paragraphs,
+            para_ids=para_ids,
             engine=self.name,
             confidence=(sum(scores) / len(scores)) if scores else 0.0,
         )
@@ -383,46 +519,70 @@ class RapidOcrEngine(OcrEngine):
         # 自适应阈值：行高中位数 × 0.5，至少 2px；显式传入则优先（测试/兼容）
         heights = sorted(p["height"] for p in parsed if p["height"] > 0)
         med_h = heights[len(heights) // 2] if heights else 12.0
-        thr = y_threshold if y_threshold else max(2.0, med_h * 0.5)
-        # 换行判定的小间隙（仅用于回并「被 DB 切成上下两截」的同逻辑行）
-        GAP = max(2.0, med_h * 0.25)
 
-        # 1) 分行：按「top 排序 + 合并带封顶」成行。
-        #    关键：合并带（row_floor）只下探约 1.5 个行高，且**只有单行短框**
-        #    才把合并带向下推进；备注列那种「换行后被检测成的高框」即使 bottom
-        #    伸到下一行，也绝不推进合并带 → 下一行的 top 不会被裹进当前行，
-        #    从而彻底避免「三行药物揉成一行」。
-        #    （早期用 max(band_bottom, bottom) 无限下探，正是 winOCR.txt 把
-        #     秋水仙碱/NSAIDs/糖皮质激素 合并成 1 行根因。）
-        parsed.sort(key=lambda x: (x["top"], x["cx"]))
-        reach = med_h * 1.5              # 合并带相对行首最多下探距离
+        # ===== 数据驱动的行间典型间距 =====
+        #
+        # 旧版用 `med_h * 0.5` 当分行阈值，对英文正文这种「行高 ≈ reach」
+        # 的常见字号（med_h 65px、reach 97.8px、行距 92px）会把多行揉成一行
+        # （连同 Phase 2 的「回并」一起触发，输出 1 个 row）。
+        #
+        # 同时它对混合字号/混合行距/用户缩放也很脆——`med_h` 是全局单一阈值，
+        # 一张大图里既有标题（行高大）又有正文/脚注（行高小），任何全局策略都会
+        # 在某一段上失配。
+        #
+        # 改为「看数据本身」：对所有按 top 排序后的相邻 top 求差，丢掉明显是
+        # 「同行多盒」造成的 0/g 极小值（< 0.3 × min_h）后取最小者作为
+        # 「本图最紧凑的真实行间 gap」。阈值取它的一半——既能稳定把紧排版
+        # 分开，也容忍宽排版（gap 比最小者还大的相邻行当然也分开），对
+        # 缩放/混合字号天然鲁棒（一切按比例缩放）。
+        sorted_by_top = sorted(parsed, key=lambda x: (x["top"], x["cx"]))
+        top_gaps = [sorted_by_top[i]["top"] - sorted_by_top[i - 1]["top"]
+                    for i in range(1, len(sorted_by_top))]
+        min_h = min((p["height"] for p in parsed if p["height"] > 0), default=12.0)
+        nontrivial_thr = max(1.0, min_h * 0.3)        # 「远大于盒内字符间距」
+        nontrivial_gaps = sorted(g for g in top_gaps if g >= nontrivial_thr)
+
+        if y_threshold:
+            thr = y_threshold                          # 测试/兼容优先
+        elif nontrivial_gaps:
+            min_gap = nontrivial_gaps[0]               # 本图最紧凑的真实行距
+            thr = max(2.0, min_gap * 0.5)
+        else:
+            thr = max(2.0, med_h * 0.5)                # 单行兜底
+
+        # 「被 DB 切成上下两截的同逻辑行」回并的间隙——DB 切片间隙通常
+        # 只有 0-2px，远小于正常行间 gap。固定小阈值，跟 med_h 解耦：
+        # med_h 大（如标题/正文混排）下 med_h*0.20 偏大，会把紧排正文
+        # 的相邻行误并；DB 真实切片几乎都是 0-2px 的接触，2.5 够用。
+        SPLIT_THR = 2.5
+
+        # 1) 分行：相邻块 top 差 ≤ thr 即同一行。
+        #    用「首块 top」作行的锚点，不再用累加式的 row_floor——
+        #    旧版 `row_floor = max(row_floor, top + reach)` 会在连续
+        #    短框累加下无限下推，把整段英文压成一行。这里一行锚定首块 top，
+        #    后续块靠 top 差是否在阈值内判断是否同行，不再下推 line boundary。
+        #    「高框」（备注列换行导致 bottom 探到下一行）top 仍在本行内，
+        #    自然归入正确行（见 test_tall_remark_cell_does_not_merge_next_row）。
         rows = []
-        row_top = None
-        row_floor = None
-        for item in parsed:
-            if row_top is None:
+        for item in sorted_by_top:
+            if not rows or item["top"] - rows[-1][0]["top"] > thr:
                 rows.append([item])
-                row_top, row_floor = item["top"], item["top"] + reach
-            elif item["top"] <= row_floor + GAP:
-                rows[-1].append(item)
-                # 仅单行短框推进合并带；高框（换行备注）原地归入本行但不延伸带
-                if item["height"] <= med_h * 1.6:
-                    row_top = min(row_top, item["top"])
-                    row_floor = max(row_floor, item["top"] + reach)
             else:
-                rows.append([item])
-                row_top, row_floor = item["top"], item["top"] + reach
+                rows[-1].append(item)
 
         # 2) 断行合并：仅回并「被 DB 切成上下两截的同一逻辑行」。
         #    判定：上一行末块与下一行首块「不重叠(overlap<=0) 且 垂直间隙很小
-        #    (0<=gap<thr)」——即两截上下拼接、几乎相贴，这才是断框；
-        #    相邻两行（即便被高框压得重叠）因 overlap>0 不会被误并。
+        #    (0<=gap<SPLIT_THR)」——两截上下拼接、几乎相贴，这才是断框。
+        #    用 SPLIT_THR（< 普通最小行距）防止 phase 1 在紧排版下漏分的两行
+        #    被这里错误地并回去。
+        if not rows:
+            return [], [], []
         merged = [rows[0]]
         for row in rows[1:]:
             prev, cur = merged[-1][-1], row[0]
             overlap = min(prev["bottom"], cur["bottom"]) - max(prev["top"], cur["top"])
             gap = cur["top"] - prev["bottom"]
-            if overlap <= 0 and 0 <= gap < thr:
+            if overlap <= 0 and 0 <= gap < SPLIT_THR:
                 merged[-1].extend(row)              # 同逻辑行被切成两截，拼回
             else:
                 merged.append(row)
