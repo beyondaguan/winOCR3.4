@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """版本信息（单一真相来源，pyproject 与 UI 都从这里读）。"""
 
-__version__ = "3.4.19"
+__version__ = "3.4.20"
 __version_name__ = "截图识字 · 离线翻译 · AI 解读"
-__release_date__ = "2026-08-25"
+__release_date__ = "2026-09-01"
 
 # 相对 3.0 的架构变化摘要（UI「关于」对话框显示）
 HIGHLIGHTS = [
+    "3.4.20 蒙版翻译字号自适应：逐行按「可用宽+译文字数」算字号，取『铺满宽度』与『OCR行高1:1上限』较小者——长译文铺满不空旷、短译文封顶不巨大；追加『选区均行高×1.3』约束防 OCR 检测框膨胀撑爆；FALLBACK 去掉选区高×0.06 巨型系数（根因）；位置仍逐行对齐 OCR 原行（原地覆盖）",
     "3.4.19 工程化改进归档：22 处裸 print 统一收敛 logging / app.py 拆出 exit_guard.py+style.py / dialogs_settings.py 再拆（dialogs_hotkey+dialogs_test）/ 配置注入收敛 apply_config（长参数列表→传配置对象）/ 修复 AI 页签连接编辑器从未显示",
     "3.4.18 工程化收尾：完整退出修复（venv shim 连根强杀，run.bat 不再杀进程）/ PYID 固定解释器身份对账工具 / 测试数据隔离（WINOCR_HOME）/ dialogs.py 按职责拆分 / 知识库跨项目检索修复",
     "3.4.17 TK 改进蓝图落地（P0~P2 全做）：P0-1 设置页点亮隐藏字段（离线模式/结构化 OCR/窗口尺寸/AI 提供方只读）/ P0-2 知识库浏览·检索·导出（JSON·MD·CSV）/ P0-3 源语言检测增强（langid 仅分中英，假名预检）/ P1 插件黑名单·OCR 智能升档·取色器克制折叠/ P2 首次运行向导·设置搜索·OpenAI 兼容提供方·系统托盘",

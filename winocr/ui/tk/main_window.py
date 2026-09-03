@@ -78,6 +78,9 @@ class MainWindow:
         self.btn_paste.pack(side=tk.LEFT, padx=2)
         self.btn_file = ttk.Button(g_input, text="📂 打开文件", command=self.ui.do_open_file)
         self.btn_file.pack(side=tk.LEFT, padx=2)
+        self.btn_mask = theme.accent_button(
+            g_input, "🎭 蒙版翻译", lambda: self.ui.run_capsule("mask_translate"))
+        self.btn_mask.pack(side=tk.LEFT, padx=2)
         band.add_group(g_input)
 
         # 组：系统

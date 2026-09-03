@@ -76,6 +76,7 @@ class TkUi(UiAdapter):
         self._pump_last = 0.0             # 泵最近一次执行的时刻（自愈心跳用）
         self._ui_thread = None            # 创建 Tk 主循环的那条线程（UI 线程守卫用）
         self._cancel_event = threading.Event()   # 任务取消令牌：用户可在长任务期间中断
+        self._mask_windows = []            # 当前活动蒙版翻译窗口（供热键强制刷新定位）
 
     # ------------------------------------------------------------------
     def bind(self, app) -> None:
@@ -314,6 +315,8 @@ class TkUi(UiAdapter):
     _HOTKEY_DEFAULTS = {
         # 截图翻译用 A 而非 S：Ctrl+Shift+S 被大量软件（IDE 另存为、微信截图）占用
         "snap_translate": "ctrl+shift+a",
+        "mask_translate": "ctrl+shift+m",   # 蒙版翻译：默认全局快捷键（启动框选）
+        "mask_refresh": "ctrl+shift+n",     # 蒙版刷新：已有蒙版时强制重译（替代右键）
         "clipboard_extract": "ctrl+shift+c",
         "translate_text": "ctrl+shift+t",
         "cycle_engine": "ctrl+shift+e",
@@ -337,6 +340,9 @@ class TkUi(UiAdapter):
             "open_knowledge": lambda: self.post(self._open_knowledge),
             "import_knowledge": lambda: self.post(self._import_knowledge),
             "cancel": lambda: self.post(self.do_cancel),
+            "mask_translate": lambda: self.post(
+                lambda: self.run_capsule("mask_translate")),
+            "mask_refresh": lambda: self.post(self.refresh_mask_windows),
             "quit": lambda: self.post(self.quit_app),
         }
         ok = self.app.start_hotkeys(handlers, defaults=self._HOTKEY_DEFAULTS)
@@ -379,6 +385,43 @@ class TkUi(UiAdapter):
     # ==================================================================
     # 业务动作
     # ==================================================================
+    def run_capsule(self, name: str) -> None:
+        """触发一个场景胶囊（如「蒙版翻译」）。必须在主线程发起。
+
+        胶囊 run() 内部可能弹出框选窗口（Tk 部件），故由 UI 线程直接调用，
+        不走事件总线。胶囊第三参接收本 TkUi 实例，用于取主 Tk 与线程安全回写。
+        """
+        import logging
+        cap_cls = self.app.capsules.get(name)
+        if cap_cls is None:
+            # 注册表按类名索引；name 字段（如 "mask_translate"）作第二索引兜底
+            for c in self.app.capsules.values():
+                if getattr(c, "name", "") == name:
+                    cap_cls = c
+                    break
+        if cap_cls is None:
+            logging.getLogger(__name__).warning("胶囊未找到: %s", name)
+            return
+        try:
+            from winocr.core.capsule import CapsuleContext
+            cap = cap_cls()                      # 注册表存的是类，必须实例化
+            ctx = CapsuleContext()
+            cap.run(ctx, self.app.pipeline, self)
+        except Exception as e:
+            logging.getLogger(__name__).exception("运行胶囊 %s 失败: %s", name, e)
+
+    def refresh_mask_windows(self) -> None:
+        """全局热键「蒙版刷新」：强制重译所有活动蒙版（替代已移除的右键刷新）。
+
+        蒙版不夺焦点，使用软件时焦点在别处，右键绑在 Tk 部件上根本收不到，
+        故改用全局热键。没有活动蒙版时静默无操作（不会误触发启动框选）。
+        """
+        for w in list(self._mask_windows):
+            try:
+                w._kick()
+            except Exception:
+                pass
+
     def do_snap(self) -> None:
         """框选截图 → OCR → 翻译。必须在主线程发起（框选窗口是 Tk 部件）。"""
         sources = self.app.services.get("capture") or {}

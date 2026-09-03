@@ -1,5 +1,343 @@
 # WinOCR 更新日志
 
+## 3.4.20 — 蒙版翻译字号自适应（2026-09-01）
+
+> 蒙版翻译（Ctrl+Shift+M）字号从「死守 OCR 行高」改为「逐行按可用宽+译文字数自适应」，
+> 彻底解决译文字形普遍巨大、空旷的问题，同时严格保持译文位置与 OCR 原行对齐（原地覆盖）。
+
+### 问题：蒙版译文字形普遍「巨大」
+
+- **现象**：框选区域做蒙版翻译后，译文字号明显大于原图文字，且常稀疏空旷；选区越高字号越大，甚至溢出蒙版。
+- **根因**：
+  1. 正常分支字号 = `OCR行框高 / _px_per_pt`，但 RapidOCR 检测框常含行距/被膨胀，单字字号被高估；且无「均行高」约束，单行长框即可把字号撑爆。
+  2. FALLBACK 分支（无 line_boxes：剪贴板 / 结构化模式）字号 = `选区高 × 0.06`，选区高 600→36pt、1000→60pt，**直接制造巨型字号**。
+
+### 改法：逐行自适应字号
+
+- 新增模块级 `_est_char_em()`（估算文本平均字宽 em：CJK≈1.0 / Latin≈0.55）+ `_fit_font_size()`：
+  `字号 = max(地板, min(铺满可用宽度的字号, 上限字号))`。
+- 正常分支：先把译文按 N 行分布，再为每行算字号——取「铺满该行宽度的字号」与
+  「OCR 行高 1:1 上限字号」的**较小者**；上限再受「选区均行高 × 1.3」约束，
+  防 OCR 检测框膨胀撑爆。长译文自然铺满宽度（不空旷）、短译文封顶原字大小（不巨大）。
+- 位置仍逐行对齐 OCR 原行（原地覆盖），段间 spacer 字号随行字号联动。
+- FALLBACK 分支：去掉 `选区高 × 0.06`，改为同一自适应算法，上限封到「选区均行高对应字号」。
+
+### 验证
+
+- 新增 `tests/test_mask_font_fit.py`（7 项纯函数单测）：长译文落到地板不溢出、短译文封顶不巨大、
+  空文本/无字宽返回地板不抛错、`_est_char_em` 的 CJK/混合字宽估算正确。
+- 现有蒙版回归 `tests/test_mask_window_poll.py` 全过（刷新 / 缓存 / silent / 排队补跑）。
+- 冒烟：`tests/test_mask_font_fit.py` + `tests/test_mask_window_poll.py` 共 12 项全绿。
+
+### 修改文件清单
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/mask_window.py` | 新增 `_est_char_em` / `_fit_font_size`；`_render` 字号逻辑改逐行自适应；FALLBACK 去 `选区高×0.06` |
+| `tests/test_mask_font_fit.py` | 新增：蒙版字号自适应纯函数单测（7 项）|
+| `winocr/version.py` | `__version__` 3.4.19 → 3.4.20，`__release_date__` 更新 |
+
+### 附：蒙版拖拽「不能移动」修复（同版补充）
+
+- **现象**：Ctrl+Shift+M 框选生成蒙版后无法拖动窗口（以前可以）。
+- **根因**：拖拽绑定误绑在标题栏 `bar`（Frame）而非 Toplevel。Tk 默认 bindtags 中
+  子控件事件只向上冒泡到其所在 Toplevel、不冒泡到直接父 Frame；故在标题栏按钮/文字上
+  按下、或鼠标移出 22px 高的 `bar` 时，`<B1-Motion>` 收不到 → 拖拽不启动或中途卡死。
+  （`mask_window.py` 此前未纳入版本控制，无可追溯的旧版差异，旧版疑似绑定在 root。）
+- **改法**：拖拽绑定改挂 `self.root`（覆盖全窗口，整窗可拖）；`_on_drag_start` 排除
+  标题栏按钮（✕ / ⟳ / 方向 / 随拖）避免点击误触移动；新增 `_on_drag_end` 仅清理拖拽
+  状态，是否自动重译由标题栏「随拖」开关决定（`__init__` 预置 `_drag_retranslate=False`
+  默认关，避免拖动时反复重译）。开启后拖动结束自动 `_kick()` 以新位置重译；关闭则仅移动、
+  由 Ctrl+Shift+N / ⟳ / 方向切换主动重译。`__init__` 预置 `_drag_active` / `_drag_offset`
+  防 AttributeError。
+- **验证**：新增 `tests/test_mask_drag.py`（2 项：整窗移动几何 + 标题栏按钮排除），
+  与字号单测、蒙版回归共 **14/14 全绿**。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/mask_window.py` | 拖拽修复：绑定由 `bar` 迁 `root`；`_on_drag_start` 排除标题栏按钮；标题栏新增「随拖」开关（`_drag_retranslate`，默认关）+ `_toggle_drag_retranslate` / `_refresh_drag_rt_btn`；`_on_drag_end` 按开关决定重译；`__init__` 预置 `_drag_active` / `_drag_offset` / `_drag_retranslate` |
+| `tests/test_mask_drag.py` | 新增：蒙版拖拽移动 + 标题栏按钮排除（2 项）|
+
+### 附：蒙版整体透明度下调（同版补充，用户要求「更透明」）
+
+- **改动**：蒙版浮层窗口透明度从 `alpha=0.85` 降到 `MASK_ALPHA=0.6`（更小=更透），
+  抽成模块级常量 `MASK_ALPHA`（`mask_window.py` 顶部），调透明度只改这一处。
+  整窗统一透明（含标题栏与译文区），原文更清晰透出。
+- **说明**：当前用 Tk 整窗 `-alpha` 实现半透明，译文文字也一并半透明；若需「文字清晰、
+  仅底色透」，属另一方案（Canvas + 不透明文字层），按需再议。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/mask_window.py` | 新增 `MASK_ALPHA=0.6` 常量；`__init__` 透明度由写死 0.85 改为引用 `MASK_ALPHA`；顶部 docstring 同步 |
+
+### 附：蒙版点阵分析 + 小框自动框选 + 原位回填（同版补充，用户选「乙 直接上 / 丙 先出方案」）
+
+- **目标**：译文从「行级累加」升级为「按 OCR 原坐标逐字原位回填」，并做点阵投影切小框。
+- **架构**：译文承载由单个 Tk `Text` 改为 **`Canvas`（`self._cv`）** 绝对坐标定位；
+  标题栏 `pack` 占顶、`Canvas` 填满其下，`Canvas(0,0)` = 窗口左上 = 选区左上，
+  OCR 框坐标直接映射（y 偏移 `BAR_H`），**消除 Text 逐行累加的纵向漂移**。
+- **点阵分析（水平投影）**：新增模块级纯函数 `_segment_line_boxes(crop)`——
+  对每行裁剪图按列累加墨像素，列墨 < 中位数 25% 判为字符间隙 → 切出字符小框（中心 x）；
+  失败（空白/低对比/异常）返回 `[]`，调用方回退整行均布。
+- **逐字回填**：新增 `_map_chars_to_boxes(chars, centers, x0, x1)`——有栅格时译文逐字沿
+  原小框中心插值（长度不符也保持原字节奏），无栅格时整行均布；每字
+  `canvas.create_text(..., anchor="center")`，字号仍用 `_fit_font_size`（防溢出/不巨大）。
+- **坐标 + 锚定**：`_render` 按每行 OCR 框 `(x0,y0,x1,y1)` 把译文钉在原行 y（段落间距因用
+  真实 y0 自然保留）；窗口高覆盖选区与原文本底部。新增 `_render_fallback`（无 line_boxes 时
+  整块居中自适应）；删除失效的 `_resize_simple`；`_kick` 抓取后存 `self._last_img` 供投影。
+- **局限（第一性声明）**：RapidOCR 仅行级框，无词/字级——小框由投影自切，非 OCR 给；
+  竖排/多栏/表格需 layout 模型先分栏（不在本期）；拉丁长句按字符断行（CJK 无影响）。
+- **验证**：新增 `tests/test_mask_dotmatrix.py`（投影切小框 3 项 + 回填映射 4 项）、
+  `tests/test_mask_render_canvas.py`（Canvas 真渲染 3 项）；与字号/轮询/拖拽共 **27/27 全绿**。
+  方案文档见 `docs/mask_dotmatrix_plan.md`。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/mask_window.py` | 渲染层 Text→Canvas；`_render` 重写（坐标映射 + 投影 + 逐字回填 + 回退）；新增 `_render_fallback` / 模块级 `_segment_line_boxes` / `_map_chars_to_boxes`；删除 `_resize_simple`；`__init__` 增 `_last_img`；`_kick` 存源图 |
+| `docs/mask_dotmatrix_plan.md` | 新增：点阵小框蒙版方案文档（架构/算法/风险/验收/改动文件）|
+| `tests/test_mask_dotmatrix.py` | 新增：投影切小框 + 回填映射纯函数单测（7 项）|
+| `tests/test_mask_render_canvas.py` | 新增：Canvas 真渲染集成测试（3 项）|
+| `tests/test_mask_drag.py` | `widget=w._tran` → `widget=w._cv`（7 处，拖拽测试仅用其作事件 widget）|
+
+### 附：蒙版窗口高度回归 fix（同版补充，用户反馈「蒙版框选多大，出来就该多大」）
+
+- **现象**：点阵小框改造后，蒙版窗口高被 OCR 检测框的 padding 撑出原框选范围，**窗口越翻译越大**，循环撑爆（截图证据：蒙版从原文区一路扩到整个 WinOCR 主窗）。
+- **根因**：`_render` 末尾 `_bh = max(self._bh, int(max_ly1) + 8)` 在 OCR 检测框 padding 让 `max_ly1`（OCR 文本底 y）偶尔 > 原 `_bh`（框选高）时把窗口撑大；`_bh` 被改写后**下游 `_grab_region` 用撑大的 `_bbox` 又去抓更大区域**，OCR 检测框 padding 进一步加大 → 循环放大。`_render_fallback` 同问题。
+- **改法**：`_render` / `_render_fallback` 末尾**钉死** `geometry(_bw × _bh, …)`，**不再写 `self._bh` 也不重算 `self._bbox`**——蒙版窗口严格 = 框选区域大小；Canvas 内容超出由 Tk 默认裁剪（不撑窗）。
+- **验证**：`tests/test_mask_render_canvas.py` 新增 3 项（`_render` / OCR 框超出场景 / `_render_fallback` 都验证 `_bh` 不变），全套蒙版用例 **30/30 全绿**。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/mask_window.py` | `_render` 末尾钉死 `_bh` 不再写（去 `max(_bh, max_ly1+8)` 与 `self._bh = h`）；`_render_fallback` 同改；新增注释说明「严禁把 h 撑出去」 |
+| `tests/test_mask_render_canvas.py` | 新增 3 项回归锁死窗口尺寸：`_render` 前后尺寸不变 / OCR 行底超出 `_bh` 不撑高 / `_render_fallback` 也不改写 |
+
+### 附：评审驱动重构 —— 职责拆分 + 缓存/性能/健壮性（同版补充，2026-09-02）
+
+> 外部代码评审（线程安全 / 缓存泄漏 / 魔数 / 性能 / SRP / 异常吞没）逐条核实后落地。
+> **纠正评审 4 处误判**：① `_tr_cache` 仅在 worker 线程读写（`_kick` 不碰），靠忙守卫已串行，无活竞态，加锁属防御性卫生；② `_SENT_PUNCT` 并非未使用（`_split_to_n`/`_merge_to_n` 在用）；③ 常量本已全模块级，无混用；④ `_grab_region` 的 `update()` 不能换 `update_idletasks()`（须 flush withdraw 否则抓到蒙版自身复发"翻页不刷新"）。
+
+- **职责拆分（用户拍板「完整拆分」）**：`MaskWindow`（生命周期+事件+kick 编排）/
+  `MaskRenderer`（Canvas 渲染+字号+分行排版，`mask_render.py`）/
+  `mask_segment.py`（点阵投影+回填映射，纯函数）/ `TranslationCache`（`mask_cache.py`，LRU+锁）/
+  `mask_const.py`（共享常量，避免循环依赖）。
+- **缓存**：裸 dict `_tr_cache`（只增不减）→ `TranslationCache`：`OrderedDict` LRU（cap 200）+ `threading.Lock`。
+- **性能**：`segment_line_boxes` 列墨统计 O(w×h) 双层 Python 循环 → NumPy 向量化 `(np.array(gray)<128).sum(axis=0)`（快 10-50×，numpy 2.5.2 已是 OCR 栈硬依赖）；`_est_char_em` 加 ASCII 快路径（保留 ord 范围判断——比评审建议的 `unicodedata.category` 更快）。
+- **健壮性**：`_grab_region`/`_render_fallback`/`segment_line_boxes` 静默 `except: pass` 补 `logger.debug`；`_kick` 的 worker/on_done/on_error 闭包提为实例方法（降嵌套）；关键方法补类型注解；魔数提取 `_BINARIZE_THRESHOLD`/`_INK_GAP_RATIO`/`_MIN_BOX_WIDTH_RATIO`；`import tkinter` 移模块顶；清理死常量 `MAX_LINES`/`PARA_GAP_FACTOR`/`_SP_RATIO`/`_SP_MIN_FONT`/`_MAX_H`。
+- **重构中引入并当场修复的回归**：重写 `_build` 时 6 处 `"<Enter"/"<Leave"` 丢结尾 `>` → `TclError: missing ">" in binding`，拖拽测试 5 项当场拦截，已修。
+- **验证**：全套蒙版用例（字号 7 + 轮询 5 + 拖拽 5 + 点阵 7 + Canvas 渲染 6）**30/30 全绿**；5 模块 smoke import 通过；无 `_tr_cache`/死常量残留引用。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/mask_const.py` | 新增：共享常量（BAR_H/MASK_ALPHA/FONT_*/_SENT_PUNCT + 点阵三常量） |
+| `winocr/ui/tk/mask_cache.py` | 新增：`TranslationCache`（LRU cap 200 + threading.Lock） |
+| `winocr/ui/tk/mask_segment.py` | 新增：`segment_line_boxes`（NumPy 向量化）+ `map_chars_to_boxes` |
+| `winocr/ui/tk/mask_render.py` | 新增：`MaskRenderer` + 字号/分行/清洗纯函数（`_est_char_em` 加 ASCII 快路径） |
+| `winocr/ui/tk/mask_window.py` | 重写为编排层：委托渲染/缓存；`_kick` 闭包提实例方法；删死常量与已迁出函数；except 补日志；类型注解 |
+| `tests/test_mask_font_fit.py` | 导入路径 `mask_window` → `mask_render` |
+| `tests/test_mask_dotmatrix.py` | 导入路径 `mask_window` → `mask_segment`（去下划线前缀新 API 名） |
+| `tests/test_mask_window_poll.py` | 手工装配补 `_cache = TranslationCache()` / `_renderer` 兜底 |
+
+### 附：刷新后渲染异常修复（同版补充，用户截图反馈，2026-09-02）
+
+> 按 Ctrl+Shift+N 刷新翻译后出现两种渲染故障（均有截图实证），根因不同、一并修复。
+
+- **现象一：译文缩成左上角一堆 6pt 小字**（英文原文未被覆盖，中文小字堆叠在 (8,8)）。
+  - **根因**：渲染主循环对 `line_boxes[i]` 直接取 `min(xs)`，刷新后 OCR 偶发返回**空行框** →
+    `min([])` 抛 ValueError → 被**整个 `_render` 共用的外层 except** 接住 → 全版译文以
+    `FONT_FLOOR=6pt` 紧急回退画在 (8,8)。一行坏框毁掉整版渲染。
+  - **改法**：① 逐行独立容错——空框/坏框只跳过该行（`continue`），不坠入全局回退；
+    ② 紧急回退也改用 `_fit_font_size` 自适应字号，不再用 6pt 地板。
+- **现象二：译文字距巨大、被摊满整行**（中文字符沿原英文字符位置稀疏分布、字号偏大）。
+  - **根因**：点阵逐字栅格展开（前版「乙」方案）把译文**逐字沿原字符中心插值**。
+    英→中译文长度远短于原文字符数（约 10 个中文字摊到 40 个英文栅格上），
+    字距被拉到原英文栅格间距 → 稀疏大字。**该方案在真实英→中场景被证伪**。
+  - **改法**：**整行整体回填**——`create_text(lx0, cy, text=整行译文, anchor="w")`，
+    左对齐原行左缘、垂直居中原行（原地覆盖不变），字号仍逐行自适应。
+    逐字栅格展开废弃；`mask_segment.py` 纯函数与单测保留（不再被渲染调用），
+    `_last_img`/`img` 参数保留兼容。
+- **验证**：新增回归 `test_render_skips_degenerate_line_without_total_fallback`
+  （两好行 + 一空框行 → 画布 ≥2 对象，锁死「坏框不得毁整版」）；全套蒙版用例 **31/31 全绿**。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/mask_render.py` | 渲染循环逐行容错（跳过空/坏框行）；逐字栅格展开 → 整行 `create_text(anchor="w")`；紧急回退改自适应字号；docstring 同步；移除 segment 导入 |
+| `winocr/ui/tk/mask_window.py` | 模块 docstring 去「逐字/点阵投影」表述 |
+| `tests/test_mask_render_canvas.py` | 新增坏框跳行回归（1 项） |
+
+### 附：OCR 框坐标系还原 + 排版保真测试（同版补充，用户反馈「行距太宽 / 区域容纳不下」，2026-09-02）
+
+> 用户要求先做「不翻译、OCR 原样排版」测试定位行距问题（样本 `pho/` 两张：英文 3 段 + 中文法条）。
+
+- **测试基建**：
+  - `tools/mask_layout_test.py`：真实 OCR → 原文按原行框渲染进蒙版（禁 `_kick` 不翻译）→ 打印每行
+    几何报告（y0/y1/h/gap/fs/字符数）+ 弹窗肉眼比对原图；`--hold` 常驻 / `--auto-close N` 自动关。
+  - `tests/test_mask_layout_fidelity.py`（3 项离屏契约）：行位逐行 == 原行框中心 − BAR_H、
+    渲染行距 == 原始行距、段间大空隙保留。mock 几何下全绿 → 排除渲染层，指向几何来源。
+- **根因（真实样本数据实证）**：`RapidOcrEngine._preprocess_image` 对小图（w/h < 600）做
+  **1.5×/2× LANCZOS 放大**增强识别，但 RapidOCR 返回的框是「放大图」坐标，`_build_result`
+  **从未缩回原图坐标系**——样本2 图高 512px，行框 y 却到 738（738÷1.5≈492 < 512，正好落在
+  放大图坐标系）。下游蒙版把框当选区局部坐标渲染 → **行位/行高/行距全部放大 1.5×**：
+  行距过宽（症状二）+ 底部行画到窗口外被裁（症状一「区域不能完全容纳文字」）。
+  该 bug 同样污染段落判定阈值与结构化表格几何——修在 OCR 层一并归正。
+- **改法**：`_preprocess_image` 返回 `(processed, scale)`；`recognize` 识别后经 `_rescale_items`
+  把所有四点框 ÷ scale 还原到原图坐标；`_build_result` 改用原图（段落/结构化几何一致）。
+- **验证**（`tools/mask_layout_test.py` 重跑）：样本1 y 最大 342 ≤ 图高 356（修复前溢出到 513），
+  行高 19px / 行内距 4-6px / 段间 27-28px 全部与原图吻合；38 项测试全绿（蒙版 31 + 排版保真 3 +
+  OCR 段落模式 4）。
+- **顺带**：蒙版透明度按用户要求调回 `MASK_ALPHA=0.6`（白底半透明呈浅灰雾面；要深色半透明改
+  `MASK_BG/MASK_FG/MASK_BAR_BG` 三个常量即可）。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/services/ocr/rapidocr.py` | `_preprocess_image` 返回 `(图, scale)`；新增 `_rescale_items`；`recognize` 坐标还原，`_build_result` 改用原图 |
+| `winocr/ui/tk/mask_const.py` | `MASK_ALPHA` 1.0 → 0.6（用户要求调回半透明） |
+| `tools/mask_layout_test.py` | 新增：真实 OCR 排版保真脚本（几何报告 + 弹窗比对） |
+| `tests/test_mask_layout_fidelity.py` | 新增：排版保真契约 3 项（行位/行距/段间） |
+
+### 附：ESC 关闭 / Ctrl+C 复制（同版补充，用户需求，2026-09-02）
+
+- **需求**：蒙版用 ESC 退出；蒙版内容可用 Ctrl+C 复制。
+- **机制**：蒙版不夺焦点（键盘事件发给用户焦点所在窗口，Tk `bind` 收不到——与当年
+  右键菜单失效同一坑），故用「**鼠标悬停在本蒙版矩形内** + `GetAsyncKeyState` 60ms
+  轻量轮询」实现（ctypes 零依赖；只查按键/鼠标状态，不抓屏无闪烁）。
+  **仅当指针位于该蒙版上时快捷键才生效**——全局 ESC/Ctrl+C 绝不被吞、不干扰其它软件。
+- **行为**：
+  - ESC（悬停）→ 关闭该蒙版；
+  - Ctrl+C（悬停）→ 复制蒙版当前显示内容（**所见即所得**：译文；流式阶段尚未出译文时
+    复制 OCR 原文），标题栏提示「✓ 已复制」1.5s；
+  - 按住沿触发（防重复）；鼠标移出蒙版自动复位沿状态。
+- **验证**：新增 `tests/test_mask_keys.py` 5 项（悬停 ESC 关 / 移出 ESC 不关 /
+  Ctrl+C 复制译文 / 回退原文 / 按住只触发一次）；全套蒙版用例 **39/39 全绿**。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/mask_window.py` | 模块级 `_key_down`/`_cursor_xy`（ctypes，可 monkeypatch）；`_watch_keys`/`_poll_keys` 悬停轮询（沿触发）；`_copy_content` 剪贴板复制；`_render` 记录 `_last_translation` |
+| `tests/test_mask_keys.py` | 新增：快捷键契约 5 项 |
+
+### 附：蒙版外设置小面板（同版补充，用户需求，2026-09-02）
+
+> 用户要求「在蒙版框外做个小面板放设置滑条」——解决遮蔽程度/字号每次都要改常量重启的问题。
+
+- **形态**：独立置顶小面板（不遮选区、不随蒙版拖拽），初始吸附蒙版右侧（屏幕放不下自动
+  缩到左侧）；标题栏新增「⚙」按钮开/关面板（点亮=可见），面板头部 ✕ 同功能；close 蒙版
+  时面板一并销毁。
+- **滑条**：
+  - **遮蔽** 0.30–1.00（步 0.05）：即时改整窗 `-alpha`（Tk 限制：底色+文字一起透）；
+  - **字号** 0.6×–1.4×（步 0.05）：即时重渲染当前 OCR/译文（不重新 OCR/翻译）。
+- **实现**：字号倍率存 `MaskWindow._font_scale`，`MaskRenderer` 三处字号（正常行 /
+  无行框 fallback / 紧急回退）统一 × `_fs_scale()`；`_render` 记录 `_last_ocr` 供滑条
+  `_rerender()` 复用。
+- **验证**：新增 `tests/test_mask_settings_panel.py` 6 项（面板创建可见 / 遮蔽改 alpha /
+  字号触发重渲染 / 无 OCR 结果不崩 / ⚙ 开关 / close 销毁面板）；全套蒙版用例 **45/45 全绿**。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/mask_window.py` | 标题栏「⚙」；`_build_settings_panel`（遮蔽/字号 Scale）+ `_place_panel`/`_toggle_settings_panel`/`_set_alpha`/`_set_font_scale`/`_rerender`；`_render` 记 `_last_ocr`；拖拽排除 ⚙；`close` 销毁面板 |
+| `winocr/ui/tk/mask_render.py` | `_fs_scale()`；正常行/fallback/紧急回退字号 × 倍率 |
+| `tests/test_mask_settings_panel.py` | 新增：设置面板契约 6 项 |
+
+### 附：字号统一上限（同版补充，用户反馈「OCR 时字号差别巨大 → 翻译后文本大小差很大」，2026-09-02）
+
+- **根因**：字号上限 = **每行自己的 OCR 框高** `h/pp`。RapidOCR 行框高度波动大
+  （部分行含 padding/虚高，h 从 19 到 40+），行框越高字号越大 → 行与行之间字号
+  跳变巨大；OCR 原文（流式阶段）与译文继承同一逐行算法，同病。
+- **改法**：新增 `_global_fs_cap(geom_heights, avg_line_h, pp)` —— 字号上限改为
+  **全选区行高中位数**（抗单行虚高）+ 原「均行高×1.3」兜底取小；渲染循环不再逐行
+  用自己的 `g["h"]` 算 cap。字号现在只随「该行文字多寡」由宽度平滑决定：满行行
+  略小、短行封顶，**不再被任何单行虚高框带飞**。
+- **验证**（`tools/mask_layout_test.py` 真实样本）：两张样本统一 `fs_cap=11pt`
+  （修复前 fs 10~18 跳变）；新增契约 2 项——`_global_fs_cap` 取中位数不取离群
+  （[19×4,40] → 19）、Canvas 端到端「虚高 60px 行不得放大字号」（各行字号一致）；
+  全套蒙版用例 **47/47 全绿**。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/mask_render.py` | 新增 `_global_fs_cap`（行高中位数统一上限）；渲染循环改用它，删逐行 `g["h"]` cap |
+| `tools/mask_layout_test.py` | 几何报告改用 `_global_fs_cap`（与渲染一致） |
+| `tests/test_mask_layout_fidelity.py` | 新增字号统一契约 2 项 |
+
+### 附：标题/大号字层级保留（同版补充，用户问「文本实际有几个大号字怎么办」，2026-09-02）
+
+- **需求**：统一上限把真标题/大号字也压平了——原文层级（标题 > 正文）应保留，其余相对统一。
+- **第一性区分**：真大号字是**断崖式更高**（如正文 19px / 标题 32px ≈1.7×）；OCR 虚高 padding
+  只是**小幅偏高**（1.1~1.4×）。以「正文行高中位数 × 1.6」作断崖阈值：
+  - 未跨阈值（正文 + 小幅虚高）→ 统一上限（正文一致、虚高不跳）；
+  - 跨阈值（真标题/大号字）→ 按自身行高 ×0.85 放行放大，保留层级。
+- **实现**：`_median_height` 拆出；新增 `_line_fs_cap(h, base_h, global_cap, pp)`，
+  渲染循环逐行调用；`tools/mask_layout_test.py` 报告同步。
+- **验证**：新增契约 3 项（标题行 27pt > 正文 19 / 小幅虚高 24px 不放大 / Canvas 端到端
+  标题 > 正文且正文两行一致）；全套蒙版用例 **50/50 全绿**。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/mask_render.py` | 新增 `_median_height` / `_line_fs_cap`（断崖阈值 1.6× + 0.85 拟合）；渲染循环逐行用 |
+| `tools/mask_layout_test.py` | 报告打印 `base_h` / 阈值，逐行用 `_line_fs_cap` |
+| `tests/test_mask_layout_fidelity.py` | 新增标题断崖契约 3 项；原「虚高统一」测试改小幅虚高(24px)语义 |
+
+### 附：加粗/黑体保留（同版补充，用户问「一段正文加粗黑体、另一句正常」，2026-09-02）
+
+- **需求**：行高相同但字重不同的文本（加粗/黑体段 vs 正常句），译文要保留强调差异。
+- **事实约束**：RapidOCR 只返回「文字+框+置信度」，**不提供字体属性**；但源图在手
+  （`_last_img`），加粗/黑体笔画粗 → **行内墨像素占比**明显高于细体正文。
+- **方案（墨密度相对断崖，与字号断崖同哲学）**：`mask_segment.line_ink_ratio(crop)` 逐行算
+  墨占比；全选区中位墨占比 ≥ `_BOLD_MIN_MEDIAN(0.05)` 时，某行 ≥ 中位 × `_BOLD_INK_FACTOR(1.5)`
+  判为加粗 → 该行译文 `font=(family, fs, "bold")`。相对阈值抗绝对字号/字体差；墨占比过低
+  （极淡/噪声）不判粗，防误判。
+- **局限（如实）**：启发式，靠"粗 vs 细"的墨量断崖。反白（白字黑底）整区墨占比统一偏高 →
+  相对比值≈1 不会伪粗；单行内浅色文字需实测调 `_BOLD_INK_FACTOR`。
+- **验证**：新增 `line_ink_ratio` 纯函数 3 项（实心块 >0.9 / 细笔划 <0.2 / 坏输入 -1）+
+  Canvas 端到端「黑体行译文 bold、细体行不 bold」（源图墨密度构造）；全套蒙版用例 **54/54 全绿**。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/mask_segment.py` | 新增 `line_ink_ratio`（墨占比）+ `_BOLD_INK_FACTOR`/`_BOLD_MIN_MEDIAN` |
+| `winocr/ui/tk/mask_render.py` | 渲染前预收集各行墨占比取中位；逐行相对断崖判 bold → 译文 `(family,fs,"bold")` |
+| `tests/test_mask_dotmatrix.py` | 新增 `line_ink_ratio` 纯函数 3 项 |
+| `tests/test_mask_layout_fidelity.py` | 新增黑体行 bold 端到端 1 项 |
+
+### 附：蒙版白底遮蔽（同版补充，借鉴 Snow Shot，用户拍板，2026-09-02）
+
+> 对标开源截图工具 Snow Shot（`mg-chao/snow-apps`，GPL-3.0）的图片翻译效果：白色不透明底板
+> 完全遮蔽原文、译文按 OCR 行整行回填。其整行回填/合并行自适应字号与 WinOCR 3.4.20 方案一致，
+> 相互验证；**差异最大且最值得借鉴的是「不透明底遮蔽」**——原 0.6 半透明灰底会让原文透出、
+> 与译文叠加干扰阅读（用户刷新故障截图实证）。
+
+- **改法**：`MASK_ALPHA 0.6 → 1.0`（不透明，绕开 Tk 整窗 alpha 连文字一起半透的限制）；
+  新增加色三常量 `MASK_BG="#ffffff"` / `MASK_FG="#1e1e1e"` / `MASK_BAR_BG="#f0f0f0"`，
+  Canvas 底、译文色（含紧急回退）、标题栏统一引用——**改这三个值即可切深色/其他主题档**。
+- **验证**：全套蒙版用例 31/31 全绿；`sticker.py` 贴图配色不受影响。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/mask_const.py` | `MASK_ALPHA→1.0`；新增 `MASK_BG` / `MASK_FG` / `MASK_BAR_BG` |
+| `winocr/ui/tk/mask_window.py` | 标题栏 6 处 `bg` → `MASK_BAR_BG`；Canvas 底色 → `MASK_BG` |
+| `winocr/ui/tk/mask_render.py` | 译文色（正常+紧急回退）→ `MASK_FG` |
+
+### 附：翻译回退链修复 + 蒙版引擎状态指示（同版补充，用户「配了 API 但蒙版译文仍差」，2026-09-02）
+
+- **用户报告**：设置了 API Key，蒙版翻译却仍是 argos 级的差译文——「蒙版需要单独切引擎吗？」
+- **定位（决定性实测）**：无需单独切——蒙版与主界面共用同一 `TranslateDispatcher`。真根因：
+  `fallback_order` 默认 **argos 第一位**，而 argos 本地语言包**必然可用** → auto 回退链每次都
+  被 argos 抢占，配好 Key 的在线引擎（glm/hunyuan/mymemory）**永远轮不到**（argos.available=True
+  与 glm.available=True 实测并存）。另：GLM 免费档当前被智谱限流（429/1305「访问量过大」，
+  并发 1 路），即使排到也会失败重试。
+- **修复**：
+  1. `config.py` 默认 `fallback_order`：`["argos","glm","hunyuan","mymemory"]` →
+     `["glm","hunyuan","mymemory","argos"]`——**在线优先，argos 只做最后离线兜底**
+     （无 Key 的引擎 available()=False 自动跳过，不受影响）；
+  2. 用户 `~/.winocr/config.toml` 同步该顺序（顺带清掉不存在的 `bing` 残留）；
+  3. 蒙版设置面板新增「**引擎**」指示行：翻译完成显示实际所用引擎——
+     **在线引擎蓝字；argos / (全部失败) 红字**，一眼看出差译文是不是离线兜底（A 项落地）。
+- **验证**：新增面板引擎指示 2 项（在线→蓝 / argos→红 / 失败→红）；全套蒙版用例 **56/56 全绿**。
+  ⚠️ 生效需**重启主程序**（运行中进程持有旧内存 config）。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/core/config.py` | 默认 `fallback_order` 在线优先、argos 兜底（附注释防回退） |
+| `~/.winocr/config.toml` | 用户配置同步新顺序，去 `bing` |
+| `winocr/ui/tk/mask_window.py` | 设置面板「引擎」行 + `_report_engine`/`_refresh_engine_label`（argos/失败红字）；worker 成功与 on_error 上报引擎 |
+| `tests/test_mask_settings_panel.py` | 引擎指示 2 项（在线蓝/argos 红、失败红） |
+
 ## 3.4.19 — 工程化改进（2026-08-25）
 
 > 正式发版：把 3.4.18 之后的工程化重构统一归档到 3.4.19，版本号与 CHANGELOG /

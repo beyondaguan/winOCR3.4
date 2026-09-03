@@ -291,16 +291,12 @@ def open_api_settings(window) -> None:
     struct = tk.BooleanVar(value=o.structured)
     ttk.Checkbutton(p3.body, text="结构化输出（表格 / 版式结构化结果，供二次处理）",
                     variable=struct).grid(row=6, column=0, sticky=tk.W)
-    auto_up = tk.BooleanVar(value=getattr(o, "auto_upgrade", True))
-    ttk.Checkbutton(p3.body, text="低置信度自动升档重试（识别模糊时自动用更高精度档再试一次）",
-                    variable=auto_up).grid(row=7, column=0, sticky=tk.W)
-
     # 段落 / 行判定模式：A / B / A+B（三选一，供对比测试；不绑快捷键）
     ttk.Label(p3.body, text="段落 / 行判定模式",
-              font=theme.UI_FONT_BOLD).grid(row=8, column=0, sticky=tk.W, pady=(8, 2))
+              font=theme.UI_FONT_BOLD).grid(row=7, column=0, sticky=tk.W, pady=(8, 2))
     para_mode = tk.StringVar(value=getattr(o, "paragraph_mode", "A+B"))
     _pm_row = ttk.Frame(p3.body)
-    _pm_row.grid(row=9, column=0, sticky=tk.W, pady=(0, 6))
+    _pm_row.grid(row=8, column=0, sticky=tk.W, pady=(0, 6))
     for _val, _lab in (("A", "A  仅行分组"),
                        ("B", "B  仅几何段落"),
                        ("A+B", "A+B  行分组+段落（推荐）")):
@@ -310,7 +306,7 @@ def open_api_settings(window) -> None:
     # 各档位模型安装状态：未安装的档位标注出来，避免误以为用了该档
     tier_state = ttk.Label(p3.body, text="", foreground=theme.TEXT_MUTED,
                            font=theme.UI_FONT_SMALL)
-    tier_state.grid(row=10, column=0, sticky=tk.W, pady=(0, 4))
+    tier_state.grid(row=9, column=0, sticky=tk.W, pady=(0, 4))
     _ocr_svc = app.services.get("ocr")
     if _ocr_svc is not None and hasattr(_ocr_svc, "model_availability"):
         try:
@@ -728,7 +724,6 @@ def open_api_settings(window) -> None:
             o.preprocess = pre.get()
             o.model_type = mt.get()
             o.structured = struct.get()
-            o.auto_upgrade = auto_up.get()
             o.paragraph_mode = para_mode.get()
         except ValueError:
             messagebox.showwarning("参数错误", "翻译 / OCR 参数必须是数字", parent=win)
