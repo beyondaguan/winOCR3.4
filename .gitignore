@@ -7,7 +7,10 @@ __pycache__/
 
 # ---- 大文件资源（单独打包/下载，不入仓库）----
 models/
-vendor/
+# 例外：argos 中英离线翻译模型（2×79MB，< GitHub 100MB 单文件限制）——
+# 用户要求随代码入库，实现「克隆即用、无需 setup 下载」
+vendor/*
+!vendor/argos_packages/
 
 # ---- 本机配置与数据（含 API Key，严禁上传）----
 config.toml

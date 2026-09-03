@@ -74,9 +74,10 @@ class OcrConfig(ConnectableConfig):
     model_type: str = "tiny"          # tiny / small / medium（本地档位）
     # --- 结构化输出（几何重建表格/版面，离线零额外模型）---
     structured: bool = False         # True = 用包围框把零散文字拼回 Markdown 表格
-    # --- 智能档位（P1-2）：低置信度自动升一档重试，取更优结果 ---
-    auto_upgrade: bool = True        # True = 识别置信度低于阈值时自动升档重试一次
-    upgrade_threshold: float = 0.5   # 低于该置信度才触发升档（0~1）
+    # --- 模型档位由用户在设置里手动选（tiny / small / medium）---
+    # 原本的「低置信度自动升档重试」已移除：升档要换档重建引擎（模型重新加载），
+    # 实测让一次识别从 ~0.9s 涨到 ~3.8s，慢 4 倍，且常常白升（置信度已 0.99）。
+    # 想要更高质量请直接在设置里把档位调高，引擎只建一次，不付重建代价。
     # --- 段落/行判定模式（A / B / A+B，供对比测试）---
     # "A"   = 仅数据驱动自适应行分组（修阅读顺序，不分段，纯 lines）
     # "B"   = 仅四角几何段落判定（行分组退回旧固定阈值，隔离 B 的效果）
@@ -90,8 +91,11 @@ class TranslateConfig(ConnectableConfig):
     target: str = "en"                # 默认译向（中→英）
     auto_translate: bool = True       # OCR 完成后自动翻译
     offline_mode: bool = False        # 离线优先：auto 回退链只走 online=False 引擎
+    # auto 回退链默认顺序：在线引擎在前（配好 Key 才 available），
+    # argos 本地离线**兜底放最后**——否则离线永远成功、在线 API 永不执行
+    # （用户实测：配了 GLM Key 却一直是 argos 差译文，2026-09-02 定位）。
     fallback_order: List[str] = field(
-        default_factory=lambda: ["argos", "glm", "hunyuan", "mymemory"]
+        default_factory=lambda: ["glm", "hunyuan", "mymemory", "argos"]
     )
 
 

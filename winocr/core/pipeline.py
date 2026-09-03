@@ -45,19 +45,25 @@ class Pipeline:
         return res
 
     def translate(self, text: str, target: Optional[str] = None,
-                  explicit: bool = False, note: str = "") -> TranslateResult:
+                  explicit: bool = False, note: str = "",
+                  silent: bool = False) -> TranslateResult:
         """explicit=True 表示目标语言由用户明确指定，不允许自动纠正方向。
-        note 为本次翻译的方向说明（如「（选中片段 → 中文）」），随事件发布，仅 UI 展示。"""
+        note 为本次翻译的方向说明（如「（选中片段 → 中文）」），随事件发布，仅 UI 展示。
+        silent=True 表示不向事件总线广播（TRANSLATE_START / TRANSLATE_DONE）。
+        供「结果不进主界面译文框」的调用方使用——例如蒙版翻译，它有自己的
+        渲染目标，若照常广播会覆盖主界面译文框、改状态栏，甚至触发自动朗读。"""
         disp = self.services.get("translate")
         if disp is None:
             raise RuntimeError("未配置翻译服务")
         if not text or not text.strip():
             return TranslateResult()
-        self.bus.publish(Events.TRANSLATE_START, (text, note))
+        if not silent:
+            self.bus.publish(Events.TRANSLATE_START, (text, note))
         t0 = time.time()
         res = disp.translate_detailed(text, target, explicit)
         res.elapsed = time.time() - t0
-        self.bus.publish(Events.TRANSLATE_DONE, res)
+        if not silent:
+            self.bus.publish(Events.TRANSLATE_DONE, res)
         return res
 
     def chat(self, msg: ChatMessage) -> str:

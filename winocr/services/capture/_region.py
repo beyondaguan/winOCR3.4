@@ -54,18 +54,19 @@ class RegionSelector:
     def _on_release(self, event):
         x1, y1 = min(self.start_x, event.x), min(self.start_y, event.y)
         x2, y2 = max(self.start_x, event.x), max(self.start_y, event.y)
+        bbox = (x1, y1, x2, y2)
 
         # 先隐藏遮罩并强制刷新，否则截到的会是遮罩本身
         self.root.withdraw()
         self.root.update()
 
         if x2 - x1 < 5 or y2 - y1 < 5:          # 误点，视为取消
-            self._finish(None)
+            self._finish(None, None)
             return
         from PIL import ImageGrab
-        self._finish(ImageGrab.grab(bbox=(x1, y1, x2, y2)))
+        self._finish(ImageGrab.grab(bbox=bbox), bbox)
 
-    def _finish(self, img):
+    def _finish(self, img, bbox=None):
         if self._done:                           # 防重复回调
             return
         self._done = True
@@ -73,7 +74,7 @@ class RegionSelector:
             self.root.destroy()
         except Exception:
             pass
-        self.callback(img)
+        self.callback(img, bbox)
 
     def show(self):
         """显示并等待用户完成（wait_window 不阻塞外层事件循环）。"""
@@ -107,10 +108,20 @@ class RegionSelector:
 
 def select_region(parent):
     """同步框选，返回 PIL.Image 或 None（用户取消）。"""
+    img, _ = select_region_box(parent)
+    return img
+
+
+def select_region_box(parent):
+    """同步框选，返回 (PIL.Image, (x1, y1, x2, y2)) 或 (None, None)。
+
+    蒙版翻译等需要把浮层钉在选区屏幕坐标上的场景用这个变体。
+    """
     holder = {}
 
-    def _cb(img):
+    def _cb(img, bbox):
         holder["img"] = img
+        holder["bbox"] = bbox
 
     RegionSelector(parent, _cb).show()
-    return holder.get("img")
+    return holder.get("img"), holder.get("bbox")

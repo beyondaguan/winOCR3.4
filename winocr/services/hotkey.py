@@ -29,6 +29,8 @@ ACTIONS = {
     "open_knowledge": "打开知识库",
     "import_knowledge": "导入知识库",
     "cancel": "取消任务",
+    "mask_translate": "蒙版翻译",
+    "mask_refresh": "蒙版刷新",
     "quit": "退出程序",
 }
 

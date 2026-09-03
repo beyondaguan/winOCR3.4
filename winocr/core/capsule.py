@@ -93,6 +93,8 @@ def discover_capsules(package_name: str = "winocr.capsules") -> Dict[str, Type]:
             obj = getattr(mod, name)
             if not inspect.isclass(obj):
                 continue
+            if obj is Capsule:                  # 排除基类自身
+                continue
             if getattr(obj, "is_capsule", False):
                 out[name] = obj
                 continue

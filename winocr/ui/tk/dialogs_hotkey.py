@@ -98,7 +98,8 @@ def open_hotkey_settings(window) -> None:
         from ...core.config import HotkeyConfig
         d = HotkeyConfig()
         for action, var in entries.items():
-            var.set(getattr(d, action))
+            # mask_translate 等动作来自胶囊默认（非 HotkeyConfig 字段），取不到用空串
+            var.set(getattr(d, action, ""))
         enabled.set(d.enabled)
 
     bar = ttk.Frame(win, padding=(12, 8))

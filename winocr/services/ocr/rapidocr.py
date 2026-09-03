@@ -45,8 +45,6 @@ class RapidOcrEngine(OcrEngine):
         self.preprocess: bool = True
         self.model_type: str = "tiny"
         self.structured: bool = False      # 几何重建表格/版面（离线，零额外模型）
-        self.auto_upgrade: bool = True     # 低置信度自动升档重试
-        self.upgrade_threshold: float = 0.5
         self.paragraph_mode: str = "A+B"   # A=仅行分组 / B=仅几何段落 / A+B=两者结合
         self._models_cache: dict = {}      # {tier: (det,rec,cls)}；配置变更后失效
 
@@ -60,8 +58,6 @@ class RapidOcrEngine(OcrEngine):
         self.preprocess = config.preprocess
         self.model_type = config.model_type
         self.structured = config.structured
-        self.auto_upgrade = config.auto_upgrade
-        self.upgrade_threshold = config.upgrade_threshold
         mode = getattr(config, "paragraph_mode", "A+B")
         self.paragraph_mode = mode if mode in ("A", "B", "A+B") else "A+B"
         self._models_cache.clear()
@@ -238,50 +234,47 @@ class RapidOcrEngine(OcrEngine):
     def recognize(self, image) -> OcrResult:
         if image is None:
             return OcrResult(engine=self.name)
+        orig_image = image
+        scale = 1.0
         if self.preprocess:
-            image = self._preprocess_image(image)
+            image, scale = self._preprocess_image(image)
         try:
             items = self._run(image)
         except Exception as e:
             logger.warning("[RapidOCR 识别失败] %s", e)
             return OcrResult(engine=self.name)
 
+        # ---- 坐标系还原 ----
+        # 预处理若放大过图片（小图 1.5×/2×），RapidOCR 返回的框是「放大图」坐标；
+        # 必须缩回原图坐标系——否则所有下游（蒙版原位覆盖 / 行重排 / 段落判定 /
+        # 结构化表格）都按放大坐标渲染，表现为行距过宽、内容溢出选区（3.4.20 实证）。
+        items = self._rescale_items(items, scale)
+
         # ---- 离群鬼字拦截 ----
         # tiny 档对中文竖排/低对比度小图的「鬼字」（如「阳美重工…」）
-        # 自信度往往 ~0.55，远低于正常行的 0.95+；均值被平均后还在 0.9+，
-        # 旧版 `confidence < upgrade_threshold` 永远不会触发。
-        # 先按 hard-threshold 过滤掉这种废项，叠加「存在低分项就升档」双保险。
+        # 自信度往往 ~0.55，远低于正常行的 0.95+；按相对阈值过滤掉这种废项。
+        # 注意：这里只做过滤，【不】再据此升档重试——升档要换档重建引擎
+        # （模型重新加载），实测会让一次识别从 ~0.9s 涨到 ~3.8s，且置信度
+        # 已经 0.99 时也会白跑。档位改由用户在设置里自己选。
         items, dropped = self._drop_outlier_items(items)
         if dropped:
             logger.info("[RapidOCR] 丢弃 %d 个低分鬼字项 (score<%.2f)",
                         dropped, self._OUTLIER_SCORE)
 
-        result = self._build_result(image, items)
-
-        # ---- 智能档位（P1-2）：低置信度 OR 检出离群 → 升档重试 ----
-        # 触发条件：启用 + 当前档非最高 + 有可用更高档
-        #   平均置信度低于阈值（兼容旧版，捕获 obvious 全图低质量场景）
-        #   OR 检测到低分离群项（tiny 出鬼字的典型特征——总分 0.95 但有 1-2 项 <0.6）
-        need_upgrade = (
-            self.auto_upgrade
-            and (result.confidence < self.upgrade_threshold or dropped > 0)
-        )
-        if need_upgrade:
-            higher = self._next_available_tier(self._effective_tier())
-            if higher:
-                try:
-                    # 注意：升档重试时不要再丢鬼字（更高档很少出鬼字，且重复过滤浪费时间）
-                    raw_items2 = self._run_with_tier(image, higher)
-                    items2, _ = self._drop_outlier_items(raw_items2)
-                    result2 = self._build_result(image, items2)
-                    if result2.confidence >= result.confidence:
-                        logger.info("[RapidOCR] %s → 升档 %s 重试，置信度 %.2f → %.2f",
-                                    f"低分离群 {dropped} 项" if dropped else f"低置信度 {result.confidence:.2f}",
-                                    higher, result.confidence, result2.confidence)
-                        result = result2
-                except Exception as e:
-                    logger.warning("[RapidOCR] 升档重试失败（忽略，用原结果）: %s", e)
+        result = self._build_result(orig_image, items)
         return result
+
+    @staticmethod
+    def _rescale_items(items, scale):
+        """把识别项四点框坐标从放大图坐标系缩回原图坐标系（scale=1 时原样返回）。"""
+        if not items or scale == 1.0:
+            return items
+        out = []
+        for box, text, score in items:
+            if box is not None:
+                box = [[x / scale, y / scale] for x, y in box]
+            out.append((box, text, score))
+        return out
 
     def _drop_outlier_items(self, items):
         """过滤掉 score 明显低于正常水平的「鬼字」识别项。
@@ -301,35 +294,6 @@ class RapidOcrEngine(OcrEngine):
             return items, 0
         kept = [it for it in items if float(it[2]) >= threshold]
         return kept, len(items) - len(kept)
-
-    def _run_with_tier(self, image, tier: str):
-        """用指定档位临时识别：换档 → 跑 → 还原档位与引擎缓存。
-
-        引擎实例按档位惰性创建（_get_engine），换档需要重建；
-        结束后恢复原档位状态，避免污染后续识别。
-        """
-        saved_type, saved_engine, saved_cache = self.model_type, self._engine, self._models_cache
-        try:
-            self.model_type = tier
-            self._engine = None
-            self._models_cache = {}
-            return self._run(image)
-        finally:
-            self.model_type = saved_type
-            self._engine = saved_engine
-            self._models_cache = saved_cache
-
-    def _next_available_tier(self, tier: str) -> Optional[str]:
-        """当前档之后的第一个「本地有模型」的更高档；没有则 None。"""
-        try:
-            idx = self._OCR_TIERS.index(tier)
-        except ValueError:
-            return None
-        for t in self._OCR_TIERS[idx + 1:]:
-            det, rec, _ = self._find_models(t)
-            if det is not None and rec is not None:
-                return t
-        return None
 
     def model_availability(self) -> dict:
         """各档位本地模型是否齐备（UI 标注「该档未安装」用）。"""
@@ -600,12 +564,17 @@ class RapidOcrEngine(OcrEngine):
     # 预处理
     # ------------------------------------------------------------------
     def _preprocess_image(self, image):
-        """小图放大 + 按图片类型选择增强策略。失败时原样返回，绝不阻断识别。"""
+        """小图放大 + 按图片类型选择增强策略。失败时原样返回，绝不阻断识别。
+
+        返回 (processed, scale)：scale 是几何放大倍数，调用方用于把识别框坐标
+        缩回原图坐标系（识别框必须与原图 1:1，见 recognize 的坐标系还原）。
+        """
         try:
             from PIL import Image, ImageEnhance, ImageFilter
 
             w, h = image.size
             processed = image
+            scale = 1.0
             if w < 600 or h < 600:
                 scale = 2 if min(w, h) < 300 else 1.5
                 processed = processed.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
@@ -620,9 +589,9 @@ class RapidOcrEngine(OcrEngine):
                     processed = processed.convert("L")
                 processed = ImageEnhance.Contrast(processed).enhance(1.3)
                 processed = processed.filter(ImageFilter.SHARPEN)
-            return processed
+            return processed, scale
         except Exception:
-            return image
+            return image, 1.0
 
     @staticmethod
     def _is_code_screenshot(image) -> bool:
