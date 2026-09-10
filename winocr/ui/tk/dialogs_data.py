@@ -563,12 +563,17 @@ def open_history(window) -> None:
         _copy("translate")
 
     def _clear() -> None:
-        if not messagebox.askyesno("清空历史", "确定清空全部历史记录吗？此操作不可恢复。",
-                                   parent=win):
+        # default="no"：回车默认选「否」，防连点误清；清空前服务层会自动备份 .bak
+        if not messagebox.askyesno(
+                "清空历史",
+                "确定清空全部历史记录吗？\n\n"
+                "清空前会自动备份一份（history.json.bak），"
+                "误清可到历史文件所在目录找回。",
+                default="no", parent=win):
             return
         try:
             store.clear()
-            _set_status("已清空历史")
+            _set_status("已清空历史（原记录已备份为 history.json.bak）")
         except Exception as e:
             _set_status(f"清空失败: {e}")
         _load()

@@ -68,8 +68,20 @@ class JsonHistory(Persistence):
             return []                                # 文件损坏就当空历史，别让程序崩
 
     def clear(self) -> None:
+        """清空全部历史。清空前自动留一份备份（<历史文件>.bak，覆盖式保留
+        最近一次清空前的全量记录），误清后可把 .bak 改名还原。"""
         with self._lock:
+            records = self.load_records()
+            if records:
+                self._backup(records)
             self._atomic_write([])
+
+    def _backup(self, records: list) -> None:
+        try:
+            with open(self.path + ".bak", "w", encoding="utf-8") as f:
+                json.dump(records, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning("[历史] 清空备份失败: %s", e)
 
     def _atomic_write(self, records: list) -> None:
         tmp = self.path + ".tmp"
