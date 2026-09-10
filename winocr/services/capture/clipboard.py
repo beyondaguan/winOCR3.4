@@ -176,6 +176,21 @@ def backup_clipboard() -> dict:
         u32.CloseClipboard()
 
 
+def clear_clipboard() -> bool:
+    """清空剪贴板（EmptyClipboard）。取词注入前调用：让后续轮询只认新内容。"""
+    try:
+        u32 = _u32()
+        if not u32.OpenClipboard(None):
+            return False
+        try:
+            u32.EmptyClipboard()
+            return True
+        finally:
+            u32.CloseClipboard()
+    except Exception:
+        return False
+
+
 def restore_clipboard(fmts: dict) -> bool:
     """把 backup_clipboard() 的结果写回剪贴板。失败安静返回 False。"""
     if not fmts:

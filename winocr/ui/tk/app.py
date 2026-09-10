@@ -632,6 +632,14 @@ class TkUi(UiAdapter):
         # 即时弹窗：按键发生的【同一瞬间】先把图贴弹出来（加载中占位），
         # 让用户立刻看到反馈；真正的取词+翻译在独立工作线程异步完成后回填。
         # 若已有翻译任务在途（busy）则不再重复弹空窗，避免「处理中」闪烁。
+        # 去抖：keyboard 库对 OS 自动重复（长按键）会再次触发回调，导致
+        # 「出现两个划词贴条」+ 两个取词 worker 并发互抢剪贴板（互相 restore
+        # 对方还没读到的复制结果）。800ms 内的重复触发一律忽略。
+        now = time.monotonic()
+        if now - getattr(self, "_sel_last_ts", 0.0) < 0.8:
+            self._sel_log("hotkey: debounced (key repeat), skipped")
+            return
+        self._sel_last_ts = now
         self._sel_log(
             "hotkey: selection_translate triggered, busy=%s" % self._busy.is_set()
         )

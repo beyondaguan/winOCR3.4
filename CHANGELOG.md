@@ -1,5 +1,53 @@
 # WinOCR 更新日志
 
+## 3.4.27 — 划词翻译取词链路修复（2026-09-11）
+
+> 针对划词翻译「取不到词 / 取到旧词 / 出现双贴条 / 程序双开」四个实报问题，对取词链路（热键 → 注入复制 → 剪贴板轮询 → 剪贴板还原）做的一致性修复。全部修复附根因注释；编译零错误，212 用例 200 过（5 个 TTS 失败为既有环境相关问题，在未含本版改动的干净树上同样复现），10 跳过。
+
+### 🔴 严重修复
+
+**划词取词：注入 Ctrl+C 前未释放物理修饰键 → 目标软件不响应复制**
+- 根因：划词热键（如 `Ctrl+Shift+D`）按下瞬间触发回调，此时物理 Ctrl/Shift 尚未松开；直接注入 C 会组合成 `Ctrl+Shift+C`——目标软件不执行复制（Chrome 甚至弹 DevTools），用户表现为「必须手动 Ctrl+C 才能取到词」
+- 修复：注入前用 `GetAsyncKeyState` 检测还按着的修饰键（Shift/Ctrl/Alt）并程序化 KEYUP 释放；物理键松开时的真实 KEYUP 照常到达，无需恢复
+- 文件：`winocr/services/capture/selection.py`
+
+**划词取词：轮询误读旧剪贴板内容（假成功/取到旧词）**
+- 根因：备份后直接注入复制并轮询，第一轮就会读到剪贴板里的旧内容——取到上一次复制的旧词，或与目标软件新写入内容相同而漏判
+- 修复：备份后先 `EmptyClipboard` 清空（新增 `clipboard.clear_clipboard()`），轮询只认本次注入新写入的内容；清空失败（旧环境无该能力）退化为旧行为
+- 文件：`winocr/services/capture/clipboard.py`、`winocr/services/capture/selection.py`
+
+### 🟡 中等修复
+
+**划词热键无去抖：键盘长按自动重复触发双贴条 + 双 worker 互抢剪贴板**
+- 根因：keyboard 库对 OS 自动重复（长按键）会再次触发回调 → 弹出两个划词贴条，两个取词 worker 并发互抢剪贴板（互相 restore 掉对方还没读到的复制结果）
+- 修复：800ms 去抖窗口，重复触发直接忽略并记日志
+- 文件：`winocr/ui/tk/app.py`
+
+**单实例互斥锁误判：LastError 被 ctypes 内部调用覆盖 → 程序双开**
+- 根因：`ctypes.windll.kernel32` 未开 `use_last_error`——ctypes 调用间隙可能执行内部 Win32 调用覆盖线程 LastError，`GetLastError()` 读到过时值，第二实例漏判 `ERROR_ALREADY_EXISTS` 直接放行（双实例 = 两份贴条 + 并发取词互抢剪贴板）；且 `CreateMutexW` 句柄按 32 位 c_int 截断
+- 修复：`ctypes.WinDLL("kernel32", use_last_error=True)` + `get_last_error()` 判 183；`restype` 显式 `c_void_p`
+- 文件：`main.py`
+
+### 补提交说明
+
+- 3.4.26 的「历史记录防误删」代码（`json_history.py` 清空备份 `.bak`、`dialogs_data.py` 确认框 default="no"）此前漏入 3.4.26 发布提交，本版随代码库补齐（CHANGELOG 3.4.26 已有完整说明，无行为差异）。
+
+### 修改文件
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/services/capture/selection.py` | 注入前释放物理修饰键；取词前清空剪贴板 |
+| `winocr/services/capture/clipboard.py` | 新增 `clear_clipboard()`（EmptyClipboard） |
+| `winocr/ui/tk/app.py` | 划词热键 800ms 去抖 |
+| `main.py` | 单实例互斥 `use_last_error` + 句柄 restype 修正 |
+| `winocr/services/persistence/json_history.py` | （补提交）清空自动备份 `.bak` |
+| `winocr/ui/tk/dialogs_data.py` | （补提交）清空确认 default="no" |
+
+### 验证
+
+- `python -m compileall winocr` 零错误
+- `pytest tests/ -q`：200 通过 / 10 跳过 / 5 失败（`test_sapi_host`、`test_tts_fallback`，经临时 worktree 在未含本版改动的 HEAD 干净树上复现，确认为既有环境相关问题，与本版改动无交集）
+
 ## 3.4.26 — 并发崩溃根治与历史记录防误删（2026-09-11）
 
 > 源于用户实报「跑 HY-MT 模型时软件崩溃」，沿崩溃日志定位到推理并发问题后全面排查，累计修复 8 个 bug（含 4 个严重级别），并为历史记录增加防误删保护。全部修复经实机复现/功能测试与全量编译验证。

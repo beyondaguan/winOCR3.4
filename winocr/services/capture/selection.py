@@ -122,12 +122,20 @@ def send_ctrl_c() -> None:
 
     必须在独立工作线程调用（不能在 keyboard 监听线程内，否则与库自身钩子
     重入死锁）。直接投给前台窗口由其完成复制。
+
+    关键：注入前先把【还按着的物理修饰键】发 KEYUP 释放。划词热键
+    （如 Ctrl+Shift+D）按下瞬间触发回调，此时物理 Ctrl/Shift 尚未松开，
+    直接注入 C 会组合成 Ctrl+Shift+C —— 目标软件不响应复制（Chrome 甚至
+    弹 DevTools），用户表现为「必须手动 Ctrl+C 才能取到词」。程序化 KEYUP
+    不影响用户物理键（松开时物理 KEYUP 照常到达），且用户即将松键，无需恢复。
     """
     from ctypes import wintypes
     u32 = ctypes.windll.user32
     INPUT_KEYBOARD = 1
     KEYEVENTF_KEYUP = 0x0002
+    VK_SHIFT = 0x10
     VK_CONTROL = 0x11
+    VK_MENU = 0x12          # Alt
     VK_C = 0x43
 
     class KEYBDINPUT(ctypes.Structure):
@@ -142,14 +150,26 @@ def send_ctrl_c() -> None:
     class INPUT(ctypes.Structure):
         _fields_ = [("type", wintypes.DWORD), ("ki", KEYBDINPUT)]
 
-    inputs = (INPUT * 4)()
-    inputs[0].type = INPUT_KEYBOARD; inputs[0].ki.wVk = VK_CONTROL
-    inputs[1].type = INPUT_KEYBOARD; inputs[1].ki.wVk = VK_C
-    inputs[2].type = INPUT_KEYBOARD; inputs[2].ki.wVk = VK_C
-    inputs[2].ki.dwFlags = KEYEVENTF_KEYUP
-    inputs[3].type = INPUT_KEYBOARD; inputs[3].ki.wVk = VK_CONTROL
-    inputs[3].ki.dwFlags = KEYEVENTF_KEYUP
-    u32.SendInput(4, ctypes.byref(inputs), ctypes.sizeof(INPUT))
+    # 物理修饰键还按着的（热键按下瞬间必按着 Ctrl，多半还有 Shift）→ 先 KEYUP
+    seq = []
+    for vk in (VK_SHIFT, VK_CONTROL, VK_MENU):
+        try:
+            if u32.GetAsyncKeyState(vk) & 0x8000:
+                seq.append((vk, KEYEVENTF_KEYUP))
+        except Exception:
+            pass
+    seq += [
+        (VK_CONTROL, 0),            # Ctrl down
+        (VK_C, 0),                  # C down
+        (VK_C, KEYEVENTF_KEYUP),    # C up
+        (VK_CONTROL, KEYEVENTF_KEYUP),
+    ]
+    inputs = (INPUT * len(seq))()
+    for i, (vk, flags) in enumerate(seq):
+        inputs[i].type = INPUT_KEYBOARD
+        inputs[i].ki.wVk = vk
+        inputs[i].ki.dwFlags = flags
+    u32.SendInput(len(seq), ctypes.byref(inputs), ctypes.sizeof(INPUT))
 
 
 def poll_clipboard_text(reader, timeout: float = 1.0,
@@ -216,18 +236,30 @@ class SelectionCapturer:
         if clipboard is None:
             try:
                 from .clipboard import (
-                    backup_clipboard, restore_clipboard, _win_clipboard_text)
+                    backup_clipboard, restore_clipboard, _win_clipboard_text,
+                    clear_clipboard)
                 clipboard = type(
                     "Clip", (),
                     {"backup": staticmethod(backup_clipboard),
                      "restore": staticmethod(restore_clipboard),
-                     "read": staticmethod(_win_clipboard_text)})()
+                     "read": staticmethod(_win_clipboard_text),
+                     "clear": staticmethod(clear_clipboard)})()
             except Exception as e:
                 self._log("capture: clipboard import error %r" % (e,))
                 return "", "none"
 
         saved = clipboard.backup()              # None = 备份失败/本就空（无需还原）
         has_backup = saved is not None
+        # 备份后清空剪贴板：让轮询只认【本次注入新写入的内容】。
+        # 不清空时 poll 第一轮就会读到旧剪贴板内容 —— 取到上一次复制的旧词
+        # （用户「手动 Ctrl+C 后热键才能取到词」正是误读旧内容的假成功），
+        # 或与目标软件复制的内容相同而漏判。清空失败（旧桩无 clear）退化为旧行为。
+        clear = getattr(clipboard, "clear", None)
+        if callable(clear):
+            try:
+                clear()
+            except Exception:
+                pass
         try:
             # 诊断：注入前的前台窗口，确认 Ctrl+C 投给了谁（UIPI/焦点问题一眼可见）
             self._log("capture: fg before inject=%r" % foreground_title())

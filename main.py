@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 
 from winocr.core import App, AppConfig
 from winocr.version import __version__
@@ -117,11 +118,18 @@ def cmd_gui(args) -> int:
     try:
         import ctypes
 
-        kernel32 = ctypes.windll.kernel32
+        # use_last_error=True：ctypes 调用间隙可能执行内部 Win32 调用，覆盖线程
+        # LastError —— windll.kernel32.GetLastError() 读到的可能是过时值，导致
+        # 第二实例漏判 ERROR_ALREADY_EXISTS、直接放行 → 双实例（两份划词贴条 +
+        # 并发取词互抢剪贴板）。必须用 use_last_error=True + get_last_error()。
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         user32 = ctypes.windll.user32
+        # HANDLE 是 64 位指针，restype 必须显式声明，否则按 32 位 c_int 截断
+        kernel32.CreateMutexW.restype = ctypes.c_void_p
         mutex_name = f"WinOCR_{__version__}_SingleInstance_Mutex"
+        # 注意：已存在时 CreateMutexW 也返回有效句柄，唯一判据是 LastError==183
         _gui_mutex = kernel32.CreateMutexW(None, False, mutex_name)
-        if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        if ctypes.get_last_error() == 183:  # ERROR_ALREADY_EXISTS
             hwnd = 0
             try:
                 # 64 位下 HWND 是 8 字节指针，必须显式声明 restype/argtypes，
@@ -130,10 +138,17 @@ def cmd_gui(args) -> int:
 
                 user32.FindWindowW.restype = wintypes.HWND
                 user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
-                # 标题须与 TkUi 主窗口标题完全一致（含版本号）
-                hwnd = user32.FindWindowW(
-                    None, f"WinOCR {__version__} — 截图识字 · 翻译 · AI"
-                )
+                # 标题须与 TkUi 主窗口标题完全一致（含版本号）。
+                # 轮询等待：旧实例可能仍在启动中（主窗口尚未创建）——连点两次
+                # run.bat 的第二个进程若不等待，会把「窗口还没建出来」误判成
+                # 僵尸锁而放行 → 双实例。8 × 0.4s ≈ 3.2s 覆盖冷启动建窗时间。
+                for _ in range(8):
+                    hwnd = user32.FindWindowW(
+                        None, f"WinOCR {__version__} — 截图识字 · 翻译 · AI"
+                    )
+                    if hwnd:
+                        break
+                    time.sleep(0.4)
             except Exception:
                 hwnd = 0
             if hwnd:
@@ -159,8 +174,9 @@ def cmd_gui(args) -> int:
                     pass
                 print("WinOCR 已经在运行 —— 已切到现有窗口。当前进程退出。")
                 return 0
-            # 否则：锁残留但窗口已死（上次崩溃/异常退出未释放锁），视为僵尸锁。
-            # 继续启动，让用户能重新打开；旧的僵尸进程可在任务管理器结束。
+            # 等待后仍找不到窗口：锁残留但窗口已死（上次崩溃/异常退出未释放锁），
+            # 视为僵尸锁。继续启动，让用户能重新打开；旧僵尸进程可在任务管理器结束。
+            print("WinOCR：单实例锁已存在但找不到运行中的窗口（疑似异常退出残留），继续启动。")
     except Exception:
         pass  # 非 Windows / ctypes 不可用，跳过
 
