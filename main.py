@@ -13,6 +13,7 @@
 设计要点：入口只做「解析参数 → 组装 App → 挂 UI」，一行业务逻辑都不写。
 换界面只换 attach_ui 那一行，这是插件化架构最直接的收益。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,6 +21,10 @@ import sys
 
 from winocr.core import App, AppConfig
 from winocr.version import __version__
+
+# 3.4.21 日志与崩溃捕获：在最早阶段初始化，确保任何异常都有迹可循
+from winocr.core.logging_config import setup_logging
+from winocr.core.crash_handler import install_crash_handler
 
 
 # ----------------------------------------------------------------------
@@ -42,7 +47,8 @@ def _is_real_console(stream) -> bool:
         handle = msvcrt.get_osfhandle(stream.fileno())
         mode = wintypes.DWORD()
         ok = ctypes.windll.kernel32.GetConsoleMode(
-            wintypes.HANDLE(handle), ctypes.byref(mode))
+            wintypes.HANDLE(handle), ctypes.byref(mode)
+        )
         return bool(ok)
     except Exception:
         return False
@@ -73,8 +79,9 @@ def _init_console() -> None:
     if sys.platform == "win32":
         try:
             import ctypes
+
             cp = ctypes.windll.kernel32.GetConsoleOutputCP()
-            if cp:                       # 0 = 本进程根本没有控制台
+            if cp:  # 0 = 本进程根本没有控制台
                 enc = f"cp{cp}"
         except Exception:
             enc = None
@@ -109,26 +116,31 @@ def cmd_gui(args) -> int:
     global _gui_mutex
     try:
         import ctypes
+
         kernel32 = ctypes.windll.kernel32
         user32 = ctypes.windll.user32
         mutex_name = f"WinOCR_{__version__}_SingleInstance_Mutex"
         _gui_mutex = kernel32.CreateMutexW(None, False, mutex_name)
-        if kernel32.GetLastError() == 183:        # ERROR_ALREADY_EXISTS
+        if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
             hwnd = 0
             try:
                 # 64 位下 HWND 是 8 字节指针，必须显式声明 restype/argtypes，
                 # 否则 ctypes 按 32 位 c_int 截断，FindWindowW 永远找不到窗口
                 from ctypes import wintypes
+
                 user32.FindWindowW.restype = wintypes.HWND
                 user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
                 # 标题须与 TkUi 主窗口标题完全一致（含版本号）
-                hwnd = user32.FindWindowW(None, f"WinOCR {__version__} — 截图识字 · 翻译 · AI")
+                hwnd = user32.FindWindowW(
+                    None, f"WinOCR {__version__} — 截图识字 · 翻译 · AI"
+                )
             except Exception:
                 hwnd = 0
             if hwnd:
                 # 确有可见窗口 → 拉到前台并退出（避免多实例抢全局热键）
                 try:
                     from ctypes import wintypes
+
                     user32.IsIconic.restype = wintypes.BOOL
                     user32.IsIconic.argtypes = [wintypes.HWND]
                     user32.IsWindowVisible.restype = wintypes.BOOL
@@ -137,11 +149,11 @@ def cmd_gui(args) -> int:
                     user32.SetForegroundWindow.argtypes = [wintypes.HWND]
                     user32.SetForegroundWindow.restype = wintypes.BOOL
                     if user32.IsIconic(hwnd):
-                        user32.ShowWindow(hwnd, 9)        # SW_RESTORE：还原最小化
+                        user32.ShowWindow(hwnd, 9)  # SW_RESTORE：还原最小化
                     elif not user32.IsWindowVisible(hwnd):
                         # 被 Esc/关闭按钮隐藏（托盘态）的窗口：SW_RESTORE 对
                         # withdraw 状态无效，必须 SW_SHOW 才能重新显示出来
-                        user32.ShowWindow(hwnd, 5)        # SW_SHOW
+                        user32.ShowWindow(hwnd, 5)  # SW_SHOW
                     user32.SetForegroundWindow(hwnd)
                 except Exception:
                     pass
@@ -150,11 +162,21 @@ def cmd_gui(args) -> int:
             # 否则：锁残留但窗口已死（上次崩溃/异常退出未释放锁），视为僵尸锁。
             # 继续启动，让用户能重新打开；旧的僵尸进程可在任务管理器结束。
     except Exception:
-        pass                                                # 非 Windows / ctypes 不可用，跳过
+        pass  # 非 Windows / ctypes 不可用，跳过
 
     app = App().build()
+
+    # 3.4.21 日志与崩溃捕获初始化（读取 config 中的 logging 配置）
+    log_cfg = app.config.logging
+    setup_logging(
+        level=log_cfg.level or None,
+        log_dir=log_cfg.dir or None,
+        console=log_cfg.console,
+    )
+    install_crash_handler()
     try:
         from winocr.ui.tk import TkUi
+
         app.attach_ui(TkUi())
     except Exception as e:
         print(f"[错误] 原生 (Tk) 界面不可用: {e}")
@@ -163,24 +185,14 @@ def cmd_gui(args) -> int:
     try:
         app.start()
     except Exception:
-        # 崩溃留痕：把 traceback 写进用户目录，方便排查（pythonw 下无控制台）
-        import traceback as _tb
-        from datetime import datetime
-        try:
-            from winocr.core.paths import user_dir
-            _log = user_dir() / "crash.log"
-            _log.write_text(
-                f"[{datetime.now()}] WinOCR 启动崩溃\n\n{_tb.format_exc()}\n",
-                encoding="utf-8",
-            )
-        except Exception:
-            pass
+        # crash_handler 已接管 sys.excepthook，这里无需手动写 crash.log
         raise
     return 0
 
 
 def cmd_console(args) -> int:
     from winocr.ui import ConsoleUi
+
     app = App().build()
     app.attach_ui(ConsoleUi())
     app.start()
@@ -188,8 +200,15 @@ def cmd_console(args) -> int:
 
 
 def cmd_doctor(args) -> int:
-    from winocr.core.paths import (argos_search_dirs, config_path, history_path,
-                                   ocr_model_dir, plugins_dir, user_dir)
+    from winocr.core.paths import (
+        argos_search_dirs,
+        config_path,
+        history_path,
+        ocr_model_dir,
+        plugins_dir,
+        user_dir,
+    )
+
     app = App().build()
 
     print("=" * 60)
@@ -197,13 +216,25 @@ def cmd_doctor(args) -> int:
     print("=" * 60)
     print(f"Python      : {sys.version.split()[0]}  ({sys.executable})")
     print(f"用户目录    : {user_dir()}")
-    print(f"配置文件    : {config_path()}  {'[存在]' if config_path().is_file() else '[未创建，用默认值]'}")
+    print(
+        f"配置文件    : {config_path()}  {'[存在]' if config_path().is_file() else '[未创建，用默认值]'}"
+    )
     print(f"历史记录    : {history_path()}")
-    print(f"插件目录    : {plugins_dir()}  {'[存在]' if plugins_dir().is_dir() else '[无，可自建]'}")
+    print(
+        f"插件目录    : {plugins_dir()}  {'[存在]' if plugins_dir().is_dir() else '[无，可自建]'}"
+    )
 
-    print(f"\n[插件装载情况]  {MARK_OK}可用  {MARK_NO}缺依赖/未配置  {MARK_DOT}未实例化")
-    axis_label = {"ocr": "OCR 引擎", "translate": "翻译引擎", "ai": "AI 提供方",
-                  "capture": "捕获源", "attach": "附件解析", "persistence": "持久化"}
+    print(
+        f"\n[插件装载情况]  {MARK_OK}可用  {MARK_NO}缺依赖/未配置  {MARK_DOT}未实例化"
+    )
+    axis_label = {
+        "ocr": "OCR 引擎",
+        "translate": "翻译引擎",
+        "ai": "AI 提供方",
+        "capture": "捕获源",
+        "attach": "附件解析",
+        "persistence": "持久化",
+    }
     for axis, items in app.describe().items():
         print(f"  {axis_label.get(axis, axis)}:")
         for it in items:
@@ -211,15 +242,17 @@ def cmd_doctor(args) -> int:
             print(f"     {flag} {it['name']:<12} {it['display']}")
 
     print("\n[关键依赖]")
-    for mod, why in (("PIL", "截图与图像处理（必需）"),
-                     ("rapidocr", "OCR 识别（必需）"),
-                     ("onnxruntime", "OCR 推理后端（必需）"),
-                     ("ctranslate2", "Argos 离线翻译"),
-                     ("sentencepiece", "Argos 分词"),
-                     ("keyboard", "全局热键"),
-                     ("pymupdf", "PDF 附件解析"),
-                     ("docx", "Word 附件解析"),
-                     ("openpyxl", "Excel 附件解析")):
+    for mod, why in (
+        ("PIL", "截图与图像处理（必需）"),
+        ("rapidocr", "OCR 识别（必需）"),
+        ("onnxruntime", "OCR 推理后端（必需）"),
+        ("ctranslate2", "Argos 离线翻译"),
+        ("sentencepiece", "Argos 分词"),
+        ("keyboard", "全局热键"),
+        ("pymupdf", "PDF 附件解析"),
+        ("docx", "Word 附件解析"),
+        ("openpyxl", "Excel 附件解析"),
+    ):
         try:
             __import__(mod)
             print(f"  {MARK_OK} {mod:<15} {why}")
@@ -228,21 +261,27 @@ def cmd_doctor(args) -> int:
 
     print("\n[模型资源]")
     from winocr.services.ocr.rapidocr import RapidOcrEngine
-    _probe = RapidOcrEngine()          # 复用统一判定（目录 + 包内）
+
+    _probe = RapidOcrEngine()  # 复用统一判定（目录 + 包内）
     for tier in ("tiny", "small", "medium"):
         md = ocr_model_dir(tier)
         det, _rec, _cls = _probe._find_models(tier)
         has = det is not None
         mark = MARK_OK if has else MARK_NO
         extra = " (随包自带)" if tier == "small" and has else ""
-        print(f"  {mark} OCR v6_{tier}: {md.name}{' [可用]' if has else ' [缺失]'}{extra}")
+        print(
+            f"  {mark} OCR v6_{tier}: {md.name}{' [可用]' if has else ' [缺失]'}{extra}"
+        )
     ocr_svc = app.services.get("ocr")
     if ocr_svc is not None:
         if isinstance(ocr_svc, RapidOcrEngine):
             eff = ocr_svc._effective_tier()
-            print(f"     当前档位: {ocr_svc.model_type} "
-                  f"(实际生效: {eff}"
-                  + ("，small 随包自带" if eff == "small" else "") + ")")
+            print(
+                f"     当前档位: {ocr_svc.model_type} "
+                f"(实际生效: {eff}"
+                + ("，small 随包自带" if eff == "small" else "")
+                + ")"
+            )
     found = [d for d in argos_search_dirs() if d.is_dir() and any(d.iterdir())]
     print(f"  Argos 包目录: {found[0] if found else '未找到（在线翻译仍可用）'}")
 
@@ -255,8 +294,10 @@ def cmd_doctor(args) -> int:
             flag = MARK_OK if getattr(cls, "enabled", True) else MARK_NO
             hot = getattr(cls, "hotkey", "") or "-"
             sec = getattr(cls, "ui_section", "") or "-"
-            print(f"  {flag} {name:<20} {getattr(cls, 'display_name', '')}  "
-                  f"[热键 {hot}] [区 {sec}]")
+            print(
+                f"  {flag} {name:<20} {getattr(cls, 'display_name', '')}  "
+                f"[热键 {hot}] [区 {sec}]"
+            )
     else:
         print("  （无）")
     return 0
@@ -264,6 +305,7 @@ def cmd_doctor(args) -> int:
 
 def cmd_models(args) -> int:
     from winocr.core.paths import argos_search_dirs, ocr_model_dir
+
     print(f"OCR 模型目录: {ocr_model_dir()}")
     if ocr_model_dir().is_dir():
         for f in sorted(ocr_model_dir().iterdir()):
@@ -275,8 +317,9 @@ def cmd_models(args) -> int:
     print("\nArgos 离线翻译包搜索路径（先找到先用）：")
     for d in argos_search_dirs():
         if d.is_dir():
-            pkgs = [p.name for p in d.iterdir()
-                    if p.is_dir() or p.suffix == ".argosmodel"]
+            pkgs = [
+                p.name for p in d.iterdir() if p.is_dir() or p.suffix == ".argosmodel"
+            ]
             mark = f"[{len(pkgs)} 个]" if pkgs else "[空]"
             print(f"   {MARK_OK} {d}  {mark}")
             for p in pkgs[:10]:
@@ -288,6 +331,7 @@ def cmd_models(args) -> int:
 
 def cmd_config(args) -> int:
     from winocr.core.paths import config_path
+
     p = config_path()
     if args.init:
         cfg = AppConfig.load()
@@ -306,9 +350,11 @@ def cmd_config(args) -> int:
 def cmd_ocr(args) -> int:
     """命令行识别，便于脚本调用与回归测试。"""
     from winocr.core.types import Capture
+
     app = App().build()
     try:
         from PIL import Image
+
         img = Image.open(args.image)
         img.load()
     except Exception as e:

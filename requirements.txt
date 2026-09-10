@@ -24,6 +24,12 @@ sentencepiece>=0.2.0
 # ---- 翻译轴 · 源语言检测（langid，轻量，只分中英；缺失时回落字符占比法）----
 langid>=1.1.6
 
+# ---- 翻译/对话轴 · llama.cpp 插件（本地离线，GGUF 量化模型，纯 CPU）----
+# 适配 HY-MT1.5-1.8B-Q4_K_M 等翻译模型，也支持 Qwen2.5-1.5B 等通用对话模型
+# 模型文件放 models/llama/ 目录；n_gpu_layers=0 禁用 GPU（GT 710 负优化）
+# 环境变量微调：WINOCR_LLAMA_THREADS / WINOCR_LLAMA_CTX / WINOCR_LLAMA_GPU_LAYERS
+llama-cpp-python>=0.3.0
+
 # ---- 附件轴（AI 对话读文档）----
 PyMuPDF>=1.24.0    # PDF 全文提取
 python-docx>=0.8.11  # Word

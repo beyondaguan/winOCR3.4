@@ -7,6 +7,7 @@
   - open_manage_projects：独立入口，列出全部项目（含已关），重开/改名/设译向/真删；
   - open_new_project_dialog：新建项目（名 + 可选译向）。
 """
+
 from __future__ import annotations
 
 import tkinter as tk
@@ -52,7 +53,7 @@ class FlowFrame(tk.Frame):
             return
         try:
             avail = self.winfo_width()
-            if avail <= 1:                      # 尚未真实映射，等下一次 Configure
+            if avail <= 1:  # 尚未真实映射，等下一次 Configure
                 return
             self.update_idletasks()
             x = self._padx
@@ -105,18 +106,28 @@ class ProjectTabBar:
             fg = "white" if is_cur else theme.TEXT_MAIN
             # 用 Frame 做容器，文字和 × 并排，避免 Label 内嵌子部件导致文字被压
             tab = tk.Frame(
-                self.frame, bg=bg, cursor="hand2",
-                highlightbackground=theme.BORDER, highlightthickness=1)
+                self.frame,
+                bg=bg,
+                cursor="hand2",
+                highlightbackground=theme.BORDER,
+                highlightthickness=1,
+            )
             inner = tk.Frame(tab, bg=bg)
             inner.pack(padx=12, pady=4)
             name_lbl = tk.Label(
-                inner, text=p.name, font=theme.UI_FONT,
-                bg=bg, fg=fg, cursor="hand2")
+                inner, text=p.name, font=theme.UI_FONT, bg=bg, fg=fg, cursor="hand2"
+            )
             name_lbl.pack(side=tk.LEFT)
             if p.id != "default":
                 x = tk.Label(
-                    inner, text="✕", font=theme.UI_FONT,
-                    bg=bg, fg=fg, cursor="hand2", padx=6)
+                    inner,
+                    text="✕",
+                    font=theme.UI_FONT,
+                    bg=bg,
+                    fg=fg,
+                    cursor="hand2",
+                    padx=6,
+                )
                 x.pack(side=tk.LEFT)
                 x.bind("<Button-1>", lambda e, pid=p.id: self._close(pid))
             # 整体点击 = 切换；点 × 已被上面单独绑定冒泡阻断
@@ -125,8 +136,11 @@ class ProjectTabBar:
             tab.pack(side=tk.LEFT, padx=3, pady=2)
             self._tabs[p.id] = tab
         add = ttk.Button(
-            self.frame, text="+", padding=(10, 4),
-            command=lambda: open_new_project_dialog(self.window))
+            self.frame,
+            text="+",
+            padding=(10, 4),
+            command=lambda: open_new_project_dialog(self.window),
+        )
         add.pack(side=tk.LEFT, padx=3, pady=2)
 
     def _switch(self, pid: str) -> None:
@@ -159,21 +173,28 @@ def open_new_project_dialog(window) -> None:
     body = ttk.Frame(win, padding=14)
     body.pack(fill=tk.BOTH, expand=True)
 
-    ttk.Label(body, text="项目名称").grid(row=0, column=0, columnspan=2,
-                                         sticky=tk.W, pady=(0, 4))
+    ttk.Label(body, text="项目名称").grid(
+        row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 4)
+    )
     name_var = tk.StringVar()
     name_ent = ttk.Entry(body, textvariable=name_var, width=24)
     name_ent.grid(row=1, column=0, columnspan=2, sticky=tk.EW, pady=(0, 10))
     name_ent.focus_set()
 
     from ...core.types import Lang
+
     lang_codes = [l.value for l in Lang]
     ttk.Label(body, text="翻译目标（可选，留空 = 继承全局设置）").grid(
-        row=2, column=0, columnspan=2, sticky=tk.W, pady=(0, 4))
+        row=2, column=0, columnspan=2, sticky=tk.W, pady=(0, 4)
+    )
     tgt_var = tk.StringVar(value="（继承全局）")
     tgt_combo = ttk.Combobox(
-        body, textvariable=tgt_var, state="readonly", width=24,
-        values=["（继承全局）"] + [f"{c} — {Lang.label(c)}" for c in lang_codes])
+        body,
+        textvariable=tgt_var,
+        state="readonly",
+        width=24,
+        values=["（继承全局）"] + [f"{c} — {Lang.label(c)}" for c in lang_codes],
+    )
     tgt_combo.current(0)
     tgt_combo.grid(row=3, column=0, columnspan=2, sticky=tk.EW, pady=(0, 12))
 
@@ -210,6 +231,7 @@ def open_new_project_dialog(window) -> None:
 def _pick_target(window, current: str) -> str:
     """小窗选译向，返回 lang code 或 ''（继承全局）。"""
     from ...core.types import Lang
+
     lang_codes = [l.value for l in Lang]
 
     win = tk.Toplevel(window.root)
@@ -218,16 +240,16 @@ def _pick_target(window, current: str) -> str:
     win.transient(window.root)
     win.grab_set()
 
-    ttk.Label(win, text="翻译目标（可选，留空 = 继承全局）",
-              padding=(12, 8)).pack(anchor=tk.W)
+    ttk.Label(win, text="翻译目标（可选，留空 = 继承全局）", padding=(12, 8)).pack(
+        anchor=tk.W
+    )
     opts = ["（继承全局）"] + [f"{c} — {Lang.label(c)}" for c in lang_codes]
     var = tk.StringVar()
     if current and current in lang_codes:
         var.set(f"{current} — {Lang.label(current)}")
     else:
         var.set("（继承全局）")
-    combo = ttk.Combobox(win, textvariable=var, state="readonly", width=26,
-                         values=opts)
+    combo = ttk.Combobox(win, textvariable=var, state="readonly", width=26, values=opts)
     combo.pack(padx=12, pady=(0, 10))
 
     res = {"code": None}
@@ -263,10 +285,14 @@ def open_manage_projects(window) -> None:
 
     top = ttk.Frame(win, padding=(10, 8))
     top.pack(fill=tk.X)
-    ttk.Button(top, text="＋ 新建项目",
-               command=lambda: open_new_project_dialog(window)).pack(side=tk.LEFT)
-    ttk.Label(top, text="关闭标签仅隐藏（数据保留）；彻底删除在右侧「删除」",
-              foreground=theme.TEXT_MUTED).pack(side=tk.LEFT, padx=(10, 0))
+    ttk.Button(
+        top, text="＋ 新建项目", command=lambda: open_new_project_dialog(window)
+    ).pack(side=tk.LEFT)
+    ttk.Label(
+        top,
+        text="关闭标签仅隐藏（数据保留）；彻底删除在右侧「删除」",
+        foreground=theme.TEXT_MUTED,
+    ).pack(side=tk.LEFT, padx=(10, 0))
 
     sf = _ScrollableFrame(win)
     sf.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
@@ -279,37 +305,54 @@ def open_manage_projects(window) -> None:
             row = ttk.Frame(sf.body, padding=(2, 4))
             row.pack(fill=tk.X, pady=2)
             name_text = p.name + ("（当前）" if p.id == cur else "")
-            ttk.Label(row, text=name_text,
-                      font=theme.UI_FONT_BOLD if p.id == cur else theme.UI_FONT
-                      ).pack(side=tk.LEFT)
-            ttk.Label(row, text="[打开]" if p.open else "[已关闭]",
-                      foreground=theme.TEXT_MUTED, width=8
-                      ).pack(side=tk.LEFT, padx=(6, 0))
+            ttk.Label(
+                row,
+                text=name_text,
+                font=theme.UI_FONT_BOLD if p.id == cur else theme.UI_FONT,
+            ).pack(side=tk.LEFT)
+            ttk.Label(
+                row,
+                text="[打开]" if p.open else "[已关闭]",
+                foreground=theme.TEXT_MUTED,
+                width=8,
+            ).pack(side=tk.LEFT, padx=(6, 0))
             tgt = p.translate_target or "继承全局"
-            ttk.Label(row, text=f"译向:{tgt}", foreground=theme.TEXT_MUTED,
-                      width=16).pack(side=tk.LEFT, padx=(4, 0))
+            ttk.Label(
+                row, text=f"译向:{tgt}", foreground=theme.TEXT_MUTED, width=16
+            ).pack(side=tk.LEFT, padx=(4, 0))
 
             if not p.open:
-                ttk.Button(row, text="重开", width=5,
-                           command=lambda pid=p.id: (pm.reopen(pid), _rebuild())
-                           ).pack(side=tk.RIGHT, padx=2)
+                ttk.Button(
+                    row,
+                    text="重开",
+                    width=5,
+                    command=lambda pid=p.id: (pm.reopen(pid), _rebuild()),
+                ).pack(side=tk.RIGHT, padx=2)
             if p.id != "default":
-                ttk.Button(row, text="改名", width=5,
-                           command=lambda pid=p.id: _rename(pid)).pack(side=tk.RIGHT, padx=2)
-                ttk.Button(row, text="设译向", width=7,
-                           command=lambda pid=p.id: _set_target(pid)).pack(side=tk.RIGHT, padx=2)
-                ttk.Button(row, text="删除", width=5,
-                           command=lambda pid=p.id: _delete(pid)).pack(side=tk.RIGHT, padx=2)
+                ttk.Button(
+                    row, text="改名", width=5, command=lambda pid=p.id: _rename(pid)
+                ).pack(side=tk.RIGHT, padx=2)
+                ttk.Button(
+                    row,
+                    text="设译向",
+                    width=7,
+                    command=lambda pid=p.id: _set_target(pid),
+                ).pack(side=tk.RIGHT, padx=2)
+                ttk.Button(
+                    row, text="删除", width=5, command=lambda pid=p.id: _delete(pid)
+                ).pack(side=tk.RIGHT, padx=2)
             else:
-                ttk.Label(row, text="默认项目", foreground=theme.TEXT_MUTED
-                          ).pack(side=tk.RIGHT, padx=4)
+                ttk.Label(row, text="默认项目", foreground=theme.TEXT_MUTED).pack(
+                    side=tk.RIGHT, padx=4
+                )
 
     def _rename(pid):
         p = pm._by_id(pid)
         if p is None:
             return
-        new = simpledialog.askstring("改名", "输入新名称：",
-                                     initialvalue=p.name, parent=win)
+        new = simpledialog.askstring(
+            "改名", "输入新名称：", initialvalue=p.name, parent=win
+        )
         if new is None:
             return
         pm.rename(pid, new)
@@ -327,14 +370,57 @@ def open_manage_projects(window) -> None:
         p = pm._by_id(pid)
         if p is None:
             return
-        if not messagebox.askyesno(
-                "删除项目",
-                f"确定彻底删除「{p.name}」吗？\n"
-                "将移除其知识库记录、翻译历史与对话历史（不可恢复）。",
-                parent=win):
-            return
-        pm.delete(pid)
-        _rebuild()
+
+        # ---- 二次确认：必须输入项目名称才可删除 ----
+        confirm_win = tk.Toplevel(win)
+        confirm_win.title("确认删除")
+        confirm_win.resizable(False, False)
+        confirm_win.transient(win)
+        confirm_win.grab_set()
+
+        body = ttk.Frame(confirm_win, padding=14)
+        body.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(
+            body, text=f"确定要彻底删除项目「{p.name}」吗？", font=theme.UI_FONT_BOLD
+        ).pack(anchor=tk.W, pady=(0, 6))
+        ttk.Label(
+            body,
+            text="此操作将移除该项目的知识库记录、翻译历史与对话历史，且不可恢复。",
+            foreground=theme.TEXT_MUTED,
+            wraplength=360,
+        ).pack(anchor=tk.W, pady=(0, 10))
+        ttk.Label(body, text=f"请输入项目名称「{p.name}」以确认删除：").pack(
+            anchor=tk.W, pady=(0, 4)
+        )
+
+        confirm_var = tk.StringVar()
+        confirm_ent = ttk.Entry(body, textvariable=confirm_var, width=28)
+        confirm_ent.pack(fill=tk.X, pady=(0, 12))
+        confirm_ent.focus_set()
+
+        def _do_delete():
+            if confirm_var.get().strip() != p.name:
+                messagebox.showwarning(
+                    "名称不匹配",
+                    "输入的项目名称不正确，删除已取消。",
+                    parent=confirm_win,
+                )
+                return
+            confirm_win.destroy()
+            pm.delete(pid)
+            _rebuild()
+
+        bar = ttk.Frame(confirm_win, padding=(14, 0, 14, 14))
+        bar.pack(fill=tk.X, side=tk.BOTTOM)
+        theme.accent_button(bar, "确认删除", _do_delete).pack(side=tk.RIGHT)
+        ttk.Button(bar, text="取消", command=confirm_win.destroy).pack(
+            side=tk.RIGHT, padx=6
+        )
+
+        confirm_ent.bind("<Return>", lambda e: _do_delete())
+        confirm_win.bind("<Escape>", lambda e: confirm_win.destroy())
+        _center(confirm_win, win)
 
     _rebuild()
     _center(win, root)

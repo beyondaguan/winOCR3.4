@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import tkinter as tk
 
 from PIL import ImageGrab
@@ -502,7 +503,33 @@ class MaskWindow:
         return ""
 
     def _grab_region(self, hide: bool = True):
-        """抓取原始选区屏幕内容。
+        """抓取原始选区屏幕内容（线程安全版）。
+
+        _worker 在后台线程运行，但 Tk 调用（withdraw/update/deiconify）只允许
+        在主线程执行——旧实现在 worker 里直触 Tk，违反「非主线程不得碰 Tk」
+        铁律，正是蒙版「偶发卡死」的隐患。这里把 隐藏→抓屏→恢复 整体投递回
+        主线程执行，worker 阻塞等待结果（带超时兜底：主线程被模态对话框阻塞
+        时放弃抓屏返回 None，绝不拖死 worker）。
+        """
+        ui = self._ui
+        ui_thread = getattr(ui, "_ui_thread", None) if ui is not None else None
+        if ui is None or ui_thread is None or ui_thread is threading.current_thread():
+            return self._grab_region_main(hide)
+        box = {}
+        done = threading.Event()
+
+        def _do() -> None:
+            try:
+                box["img"] = self._grab_region_main(hide)
+            finally:
+                done.set()
+
+        ui.post(_do)
+        done.wait(timeout=5.0)
+        return box.get("img")
+
+    def _grab_region_main(self, hide: bool = True):
+        """主线程内执行：临时隐藏蒙版 → ImageGrab 抓屏 → 恢复蒙版。
 
         hide=True（实际 OCR）：先临时隐藏蒙版，否则会把蒙版自身（半透明译文）
         截进去，OCR 识别到译文而非原文 → 翻页/滚动后翻译永远不变（"不刷新"）。

@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="RTAoIXaJgLeozeyDh9YBuT">
+<head data-page-node-id="VxGNMYDRXZQcJg8Mu3G0xs">
+<meta charset="UTF-8" data-page-node-id="f5zDvpS1yJAVhYdcMgWtDx">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="idELZsUyUNJTqMSsABl9bD">
+<title>WinOCR 3.4 — 截图交互层 · 遮罩/选区/扫描/叠加翻译</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" data-page-node-id="DT2EYKDPZJpgdXM3NE6FEy">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin data-page-node-id="aPNDlQVZH58rIjwD0hvFDi">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" data-page-node-id="2QNsBMhjMXB4DgLc3gtY0X">
+<style>
+/* ============================================================
+   WinOCR 3.4 — 截图交互层演示
+   维度：脱离主窗口的叠加层 — 遮罩 · 选区 · 扫描 · 翻译叠加
+   ============================================================ */
+:root {
+  --bg: #14161a; --surface: #1e2127; --surface2: #26292f; --surface3: #2f333a;
+  --border: rgba(255,255,255,.08); --border2: rgba(255,255,255,.16);
+  --text: #e8e4dc; --text2: #a09a90; --text3: #6b6560;
+  --accent: #ff6b2c; --accent-d: rgba(255,107,44,.15);
+  --ok: #4ade80; --ok-d: rgba(74,222,128,.12);
+  --warn: #fbbf24; --warn-d: rgba(251,191,36,.12);
+  --info: #60a5fa; --info-d: rgba(96,165,250,.12);
+  --font-d: 'Archivo Black','Noto Sans SC',system-ui,sans-serif;
+  --font-b: 'IBM Plex Sans','Noto Sans SC',system-ui,sans-serif;
+  --font-m: 'JetBrains Mono','Cascadia Code',Consolas,monospace;
+  --r1:3px; --r2:6px; --r3:10px;
+  --s2:0 4px 12px rgba(0,0,0,.32); --s3:0 12px 32px rgba(0,0,0,.42);
+  --ease: cubic-bezier(.16,1,.3,1);
+  --d1:150ms; --d2:280ms;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:13px;-webkit-font-smoothing:antialiased}
+body{font-family:var(--font-b);background:var(--bg);color:var(--text);line-height:1.5;overflow-x:hidden}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ============================================================
+   页面布局 — 多状态流程展示
+   ============================================================ */
+.page{max-width:1100px;margin:0 auto;padding:40px 24px}
+
+/* ---------- 页头 ---------- */
+.page-h{margin-bottom:36px;padding-bottom:24px;border-bottom:1px solid var(--border)}
+.bc{font-size:12px;color:var(--text3);margin-bottom:12px}
+.bc a{color:var(--text2);text-decoration:none}
+.bc a:hover{color:var(--accent)}
+.page-title{font-family:var(--font-d);font-size:28px;color:var(--text);letter-spacing:-.02em}
+.page-sub{font-size:14px;color:var(--text2);margin-top:6px;max-width:600px}
+
+/* ============================================================
+   流程步骤指示器
+   ============================================================ */
+.flow-bar{display:flex;gap:0;margin-bottom:32px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r3);overflow:hidden}
+.flow-step{flex:1;padding:14px 12px;text-align:center;font-size:12px;color:var(--text3);border-right:1px solid var(--border);transition:all .3s;position:relative}
+.flow-step:last-child{border-right:none}
+.flow-step.active{color:var(--accent);background:var(--accent-d)}
+.flow-step.done{color:var(--ok)}
+.flow-step .step-num{font-family:var(--font-m);font-size:10px;display:block;margin-bottom:2px;opacity:.6}
+
+/* ============================================================
+   状态演示区
+   ============================================================ */
+.demo-section{margin-bottom:40px}
+.demo-stitle{font-family:var(--font-d);font-size:20px;color:var(--text);margin-bottom:16px;letter-spacing:-.01em}
+.demo-desc{font-size:13px;color:var(--text2);margin-bottom:20px;max-width:680px}
+
+/* ---------- 桌面模拟 ---------- */
+.desktop-sim{position:relative;height:360px;background:linear-gradient(135deg,#2a3a4a 0%,#1a2530 50%,#0f151a 100%);border-radius:var(--r3);border:1px solid var(--border);overflow:hidden;margin-bottom:16px}
+
+/* 模拟桌面图标 */
+.desk-icon{position:absolute;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:rgba(255,255,255,.7);cursor:default}
+.desk-icon .icon{font-size:24px}
+.desk-icon.i1{top:20px;left:20px}
+.desk-icon.i2{top:20px;right:20px}
+.desk-icon.i3{bottom:20px;left:20px}
+
+/* 模拟应用窗口 */
+.sim-win{position:absolute;background:#f0f0f0;border-radius:6px;box-shadow:var(--s3);overflow:hidden;transition:all .3s}
+.sim-win-bar{background:#e0e0e0;padding:6px 10px;font-size:10px;color:#333;display:flex;align-items:center;gap:5px}
+.sim-win-dot{width:8px;height:8px;border-radius:50%}
+.sim-win-body{padding:12px;font-size:11px;color:#333;line-height:1.6;max-height:120px;overflow:hidden}
+.sim-win-body strong{color:#111}
+.sim-win-body code{background:#f5f5f5;padding:1px 5px;border-radius:2px;font-family:var(--font-m);font-size:10px;color:#c7254e}
+
+/* 窗口位置 */
+.sw1{top:40px;left:12%;width:260px;z-index:1}
+.sw2{top:80px;right:8%;width:220px;z-index:1}
+.sw3{bottom:20px;left:30%;width:200px;z-index:1}
+
+/* ============================================================
+   遮罩层（覆盖在桌面模拟上）
+   ============================================================ */
+.overlay{position:absolute;inset:0;z-index:10;pointer-events:none;transition:opacity .3s}
+.overlay-bg{position:absolute;inset:0;background:rgba(0,0,0,.6)}
+
+/* 选区框 */
+.sel-box{position:absolute;border:2px solid var(--accent);background:rgba(255,107,44,.08);display:none;z-index:11;transition:all .05s}
+.sel-box.active{display:block}
+
+/* 尺寸标签 */
+.size-tag{position:absolute;background:var(--accent);color:var(--bg);padding:2px 8px;border-radius:var(--r1);font-family:var(--font-m);font-size:10px;font-weight:500;display:none;z-index:12}
+.size-tag.active{display:block}
+
+/* 操作提示条 */
+.op-tip{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(30,33,39,.95);padding:7px 16px;border-radius:var(--r2);font-size:12px;color:var(--text);border:1px solid var(--border);box-shadow:var(--s2);z-index:20;display:flex;gap:8px;align-items:center;white-space:nowrap}
+.op-tip kbd{background:var(--surface3);border:1px solid var(--border2);border-radius:var(--r1);padding:2px 6px;font-family:var(--font-m);font-size:11px;color:var(--accent)}
+
+/* ============================================================
+   扫描线效果
+   ============================================================ */
+.scan-area{position:relative;overflow:hidden}
+.scan-area::after{content:'';position:absolute;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:scanMove 1.5s ease-in-out infinite;box-shadow:0 0 12px var(--accent)}
+@keyframes scanMove{0%{top:0}100%{top:100%}}
+
+/* ============================================================
+   结果叠加层 — OCR + 翻译
+   ============================================================ */
+.result-overlay{position:absolute;z-index:15;display:none}
+.result-overlay.active{display:block}
+
+/* OCR 原文面板（左侧） */
+.ocr-panel{position:absolute;left:16px;bottom:60px;width:220px;background:rgba(30,33,39,.95);border:1px solid var(--border);border-radius:var(--r3);padding:12px;box-shadow:var(--s3);animation:slideUp .3s var(--ease) both}
+.ocr-panel .panel-tag{font-size:10px;font-weight:600;color:var(--info);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.ocr-panel .panel-text{font-size:11px;line-height:1.6;color:var(--text);max-height:100px;overflow-y:auto}
+.ocr-panel .panel-meta{font-family:var(--font-m);font-size:10px;color:var(--text3);margin-top:6px;display:flex;gap:8px}
+
+/* 翻译结果面板（右侧） */
+.trans-panel{position:absolute;right:16px;bottom:60px;width:220px;background:rgba(30,33,39,.95);border:1px solid var(--accent);border-radius:var(--r3);padding:12px;box-shadow:var(--s3);animation:slideUp .3s var(--ease) .1s both}
+.trans-panel .panel-tag{font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.trans-panel .panel-text{font-size:11px;line-height:1.6;color:var(--text);max-height:100px;overflow-y:auto}
+.trans-panel .panel-meta{font-family:var(--font-m);font-size:10px;color:var(--text3);margin-top:6px;display:flex;gap:8px}
+
+/* 划词翻译浮层 */
+.hover-trans{position:absolute;background:rgba(30,33,39,.95);border:1px solid var(--accent);border-radius:var(--r2);padding:8px 12px;font-size:11px;color:var(--text);max-width:200px;box-shadow:var(--s3);z-index:30;display:none;animation:fadeIn .15s both}
+.hover-trans.active{display:block}
+.hover-trans .ht-text{color:var(--accent);font-weight:500}
+.hover-trans .ht-orig{color:var(--text3);font-size:10px;margin-top:2px}
+
+/* 逐词高亮 */
+.word-highlight{background:var(--accent-d);color:var(--accent);padding:0 2px;border-radius:1px;cursor:help;position:relative;transition:background .15s}
+.word-highlight:hover{background:var(--accent);color:var(--bg)}
+
+/* ============================================================
+   各状态预览卡片
+   ============================================================ */
+.state-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px}
+.state-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r3);padding:16px;transition:all .2s;cursor:pointer;position:relative}
+.state-card:hover{border-color:var(--border2);background:var(--surface2);transform:translateY(-2px)}
+.state-card.active-card{border-color:var(--accent);background:var(--accent-d)}
+.state-card .sc-num{font-family:var(--font-m);font-size:10px;color:var(--text3);margin-bottom:6px}
+.state-card .sc-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px}
+.state-card .sc-desc{font-size:11px;color:var(--text2);line-height:1.4}
+
+/* ============================================================
+   主演示交互区
+   ============================================================ */
+.main-demo{position:relative;height:380px;background:linear-gradient(135deg,#2a3a4a,#1a2530);border-radius:var(--r3);border:1px solid var(--border);overflow:hidden;margin-bottom:20px}
+.main-demo canvas{position:absolute;inset:0;width:100%;height:100%}
+
+/* 控制栏 */
+.ctrl-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:var(--r2);font-size:12px;font-weight:500;transition:all var(--d1) var(--ease);height:32px}
+.btn-p{background:var(--accent);color:var(--bg)}
+.btn-p:hover{background:#ff7f45;transform:translateY(-1px);box-shadow:var(--s2)}
+.btn-g{background:transparent;color:var(--text2);border:1px solid var(--border)}
+.btn-g:hover{background:var(--surface2);color:var(--text);border-color:var(--border2)}
+.btn.active{background:var(--accent-d);color:var(--accent);border-color:var(--accent)}
+
+/* 进度指示 */
+.progress-bar{position:fixed;top:0;left:0;height:2px;background:var(--accent);z-index:1000;transition:width .3s;opacity:0}
+.progress-bar.active{opacity:1}
+
+/* ============================================================
+   状态说明
+   ============================================================ */
+.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:24px}
+.info-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r3);padding:16px}
+.info-card .ic-h{font-size:12px;font-weight:600;color:var(--accent);margin-bottom:6px}
+.info-card .ic-b{font-size:11px;color:var(--text2);line-height:1.5}
+.info-card .ic-b code{background:var(--bg);padding:1px 4px;border-radius:var(--r1);font-family:var(--font-m);font-size:10px;color:var(--info)}
+
+/* ============================================================
+   交互说明
+   ============================================================ */
+.instr-bar{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(30,33,39,.95);border:1px solid var(--border);border-radius:var(--r3);padding:10px 20px;box-shadow:var(--s3);z-index:100;display:flex;gap:16px;align-items:center;font-size:12px}
+.instr-bar kbd{background:var(--surface3);border:1px solid var(--border2);border-radius:var(--r1);padding:2px 7px;font-family:var(--font-m);font-size:11px;color:var(--accent)}
+.instr-bar .sep{width:1px;height:16px;background:var(--border)}
+
+/* ============================================================
+   动画
+   ============================================================ */
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes scanMove{0%{top:0}100%{top:100%}}
+
+/* ============================================================
+   响应式
+   ============================================================ */
+@media(max-width:900px){
+  .state-grid{grid-template-columns:repeat(2,1fr)}
+  .info-grid{grid-template-columns:1fr}
+  .page{padding:24px 16px}
+  .sw1,.sw2,.sw3{position:static;width:100%;margin-bottom:8px}
+  .desktop-sim{auto}
+}
+</style>
+</head>
+<body data-page-node-id="Vm5dppWvFL30RKGEIXJwvG">
+<div class="page" data-page-node-id="zdGGGA8nfyNzFlkqdkyx64">
+
+<!-- 页头 -->
+<header class="page-h" data-page-node-id="LGwW8svvtdVsWVNAfuf7PV">
+  <div class="bc" data-page-node-id="k5PjxzY2U1pQ48AZHkI2ve"><a href="index.html" data-page-node-id="oXiekbLZKYV8olsIPxB0gQ">← 返回主窗口 GUI</a> / 截图交互层演示</div>
+  <h1 class="page-title" data-page-node-id="x896yiWYxkwf55fWEjNzO8">截图交互层</h1>
+  <p class="page-sub" data-page-node-id="ARKUhfyFQBqxEjBUZitVcD">脱离主窗口的叠加层体验 — 遮罩 · 选区 · OCR 扫描 · 翻译叠加 · 划词悬浮</p>
+</header>
+
+<!-- 流程步骤指示器 -->
+<div class="flow-bar" aria-label="流程步骤" data-page-node-id="Xv9ECGcLzinFHIqmOXggH1">
+  <div class="flow-step active" data-step="1" data-page-node-id="KHooBZkWtw31gUxh2zDq3P"><span class="step-num" data-page-node-id="BujbDiJ8WbR5DTPi0SjK09">01</span>遮罩</div>
+  <div class="flow-step" data-step="2" data-page-node-id="5REgWcXIlCbqktmDKRvbIr"><span class="step-num" data-page-node-id="KszEyrsEnpjqdNdi6eZJ9b">02</span>选区</div>
+  <div class="flow-step" data-step="3" data-page-node-id="0Xz5mJ9Ic5jcq1cXvHodzU"><span class="step-num" data-page-node-id="ETE9Z9LuFrPZXN4YzIfDiU">03</span>扫描</div>
+  <div class="flow-step" data-step="4" data-page-node-id="HwTn6903CZcNZWz4JA3mk2"><span class="step-num" data-page-node-id="0laIIHCwyN7JLOx0msgeac">04</span>翻译</div>
+  <div class="flow-step" data-step="5" data-page-node-id="8uPTEeDMuQYcOnJG00pj7p"><span class="step-num" data-page-node-id="GjISAYQrJQlF2dRY7IbqRQ">05</span>叠加展示</div>
+</div>
+
+<!-- ============================================================
+   状态预览卡片
+   ============================================================ -->
+<div class="demo-section" data-page-node-id="PUOx8UZGInlTYERMPWTXNN">
+  <h2 class="demo-stitle" data-page-node-id="RHhaG5JF2jlHHm9AAZqSyj">五种交互状态</h2>
+  <p class="demo-desc" data-page-node-id="aW1AQ7ZL4OyCoaCkwO0ah6">点击任一状态，下方主演示区会切换到对应阶段。也可点击「自动演示」观看完整流程。</p>
+  <div class="state-grid" data-page-node-id="5BkZ6yFkmrRu3hwVGVVLws">
+    <div class="state-card active-card" data-demo="overlay" data-page-node-id="HU4aMRYF5m7tSdNQper9LQ">
+      <div class="sc-num" data-page-node-id="y1vAW8iZt02zFnzjVQGjnj">STAGE 01</div>
+      <div class="sc-title" data-page-node-id="twCb1TpsnKmERgeRxogoLC">遮罩层</div>
+      <div class="sc-desc" data-page-node-id="mDEWjf6atNJ0k3ag6ZJ4ik">全屏半透明压暗，突出选区操作区域。不遮挡桌面元素的可识别性。</div>
+    </div>
+    <div class="state-card" data-demo="selection" data-page-node-id="UE7oCzzHETQR217tzygCrr">
+      <div class="sc-num" data-page-node-id="uupI6EINhhBgsSou2d2ACC">STAGE 02</div>
+      <div class="sc-title" data-page-node-id="hV3LGkgeFvjleUBoAMwXOJ">选区拖拽</div>
+      <div class="sc-desc" data-page-node-id="Mi2UK1cMoRSFefJuKwLzpE">鼠标拖拽绘制矩形选区，实时显示尺寸标注（宽×高）。支持微调。</div>
+    </div>
+    <div class="state-card" data-demo="scanning" data-page-node-id="UL1dF3zrYFX2OM2HpezQrE">
+      <div class="sc-num" data-page-node-id="McszPABJYsC6wIedsfyHuB">STAGE 03</div>
+      <div class="sc-title" data-page-node-id="mgNuP17z6awvhvCmAHN3tb">OCR 扫描</div>
+      <div class="sc-desc" data-page-node-id="qcCQOEs4IkhOlcQBx0BXnR">扫描线自上而下扫过选区，模拟 RapidsOCR 推理过程。显示识别进度。</div>
+    </div>
+    <div class="state-card" data-demo="results" data-page-node-id="jdljwXEWxK6G5J3ECkRRGW">
+      <div class="sc-num" data-page-node-id="eP42BYGn4j1xhmFEHzJur1">STAGE 04</div>
+      <div class="sc-title" data-page-node-id="7BjhA6WqPHU7N4H3qkmZZt">翻译叠加</div>
+      <div class="sc-desc" data-page-node-id="f1CprAhG0hclNRzgaqq7ad">识别+翻译完成后，结果面板以浮层形式贴附在选区旁边，可逐词对照。</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+   主演示区
+   ============================================================ -->
+<div class="demo-section" data-page-node-id="5FcwyeXmXzeD4qYFAPHX7A">
+  <h2 class="demo-stitle" data-page-node-id="b4udMG5bTkXvIXcAQIANQE">交互演示</h2>
+  <p class="demo-desc" data-page-node-id="q7zOmu0go0WVLRMrdWe2CY">下方为模拟桌面环境，包含医学文献窗口。点击开始截图，体验完整流程。</p>
+
+  <div class="main-demo" id="main-demo" data-page-node-id="WDPs7CGI9G8yMyrSdpA18X">
+    <!-- 桌面背景层 -->
+    <div class="desktop-sim" style="position:absolute;inset:0;background:linear-gradient(135deg,#2a3a4a,#1a2530);border-radius:0;border:none" data-page-node-id="9z4XvuDefpKL061TABFpcu">
+      <!-- 桌面图标 -->
+      <div class="desk-icon i1" data-page-node-id="Lge2umkVzV36kQjvkYKB9Q"><span class="icon" data-page-node-id="I4A7gutqgZqLNxMmMRVh7O">📁</span><span data-page-node-id="nObOhaARhlHJhBZIxDA69Q">文献</span></div>
+      <div class="desk-icon i2" data-page-node-id="itVrcVSQg5JagPBM15oOUr"><span class="icon" data-page-node-id="ft2iGTkhJ22Jm6NNAaAagV">🌐</span><span data-page-node-id="BcUZsFwzETUdAq9BlE4hSX">浏览器</span></div>
+      <div class="desk-icon i3" data-page-node-id="svaiGFjHwnCPajOXX244a6"><span class="icon" data-page-node-id="A1FETvp8BXGwXlpPmYEdLR">📝</span><span data-page-node-id="eGs7NMRLrsJjXFC4FQIJLu">病历模板</span></div>
+
+      <!-- 模拟应用窗口 -->
+      <div class="sim-win sw1" id="sim-win-1" data-page-node-id="AkvMntnNMChLu1aaM2Bsks">
+        <div class="sim-win-bar" data-page-node-id="rCAHl4vmz1To72ZkDHi5gX">
+          <span class="sim-win-dot" style="background:#ff5f57" data-page-node-id="6NyZMN50Fy7GDYsG36gWcf"></span>
+          <span class="sim-win-dot" style="background:#febc2e" data-page-node-id="sW58jdvh7usvrHIzzBvFt9"></span>
+          <span class="sim-win-dot" style="background:#28c840" data-page-node-id="ZDzQJwEOXIAmoH85sR9tYy"></span>
+          <span style="margin-left:6px" data-page-node-id="6CPpSg7FCMlM1glwvI9SsW">医学文献.pdf — Adobe Reader</span>
+        </div>
+        <div class="sim-win-body" data-page-node-id="Mz936NrGgdrkkMT9VEVBki">
+          <p data-page-node-id="XqQEbM4Q32VLnt2Af5b0Ne"><strong data-page-node-id="ifJUE1Kz0KFh4v5UFYaWBN">Prostate Cancer Screening Guidelines</strong></p>
+          <p style="margin-top:4px" data-page-node-id="IV78KNN9rXwAYkECBgEG3G">Men aged 55-69 should make an individual decision about PSA-based screening after discussion of benefits and harms.</p>
+          <p style="margin-top:4px" data-page-node-id="AO6RZirI9gjsJKKdlNuiSE">For men with a life expectancy &lt;10 years, screening is not recommended.</p>
+          <p style="margin-top:4px" data-page-node-id="qJBzSky5zWNJiNthjnWUpF">The PSA test has a sensitivity of approximately 85% for clinically significant cancer.</p>
+        </div>
+      </div>
+
+      <div class="sim-win sw2" data-page-node-id="8JjR4RQe7ycss1g0HUEh8v">
+        <div class="sim-win-bar" data-page-node-id="OGC62PV9iICuBa9bKfTDBN">
+          <span class="sim-win-dot" style="background:#ff5f57" data-page-node-id="1AhCW63tNViyMo0yuVSNC0"></span>
+          <span class="sim-win-dot" style="background:#febc2e" data-page-node-id="7LVvFAVcZE92toEcCpF7f2"></span>
+          <span class="sim-win-dot" style="background:#28c840" data-page-node-id="B4SXtO6Nhs9cHPzTUmrxds"></span>
+          <span style="margin-left:6px" data-page-node-id="IrLSqlsmkPyNtyzA1xI8OV">UpToDate — BPH Management</span>
+        </div>
+        <div class="sim-win-body" data-page-node-id="JcgG2EO6K6wXZj1WZJ6qXh">
+          <p data-page-node-id="CwKvCoHCFDiHQSGMvjNby2">BPH: First-line medical therapy includes <code data-page-node-id="Ne9YtLjTUH4kzLf2n0uuBE">alpha-blockers</code> (tamsulosin 0.4mg daily) and <code data-page-node-id="bLnHSCmKiBtlCAW5RPOWeG">5-ARI</code> (finasteride 5mg daily).</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 遮罩层 -->
+    <div class="overlay" id="overlay" data-page-node-id="edsU6aP6Lsuv7TInHn5WfL">
+      <div class="overlay-bg" data-page-node-id="JYn4ZUJrCuTvfq6BTuxe3l"></div>
+    </div>
+
+    <!-- 选区框 -->
+    <div class="sel-box" id="sel-box" data-page-node-id="WjoVqL6BzBL2oGyyoxQwSO"></div>
+    <div class="size-tag" id="size-tag" data-page-node-id="M9Cr9TN2b58MtK734FNl2R">250 × 60</div>
+
+    <!-- 操作提示 -->
+    <div class="op-tip" id="op-tip" data-page-node-id="bjJ9WmKOk0Bk7zSYQ0SDtN">
+      <span data-page-node-id="GUONEHZQW0HqKZdWZ3a4sJ">拖拽选择区域</span>
+      <span class="sep" style="width:1px;height:14px;background:var(--border)" data-page-node-id="pDZZMfW0tJFCdo3hFdPn7M"></span>
+      <span data-page-node-id="gQxHV2bcYMSIfZq7nye71X"><kbd data-page-node-id="yMcZzuuvpWBrGxQI2AIVLD">Esc</kbd> 取消</span>
+      <span data-page-node-id="BFJ2WoW3m14VVNSwezkgKv"><kbd data-page-node-id="wi06Db3ORAzqwI7hhl7ykG">Enter</kbd> 确认</span>
+    </div>
+
+    <!-- OCR 结果面板（左侧） -->
+    <div class="ocr-panel" id="ocr-panel" style="display:none" data-page-node-id="Keiu3IQpQS87zhQmiLAvw8">
+      <div class="panel-tag" data-page-node-id="TRBAG4z0FTYuxdnFw5sule">OCR Source</div>
+      <div class="panel-text" id="ocr-text" data-page-node-id="tgAFRJxaQiyGQbhqJsFPLt">Prostate Cancer Screening Guidelines. Men aged 55-69 should make an individual decision about PSA-based screening...</div>
+      <div class="panel-meta" data-page-node-id="vcz8auGfaMyfZcXx1rdYLY">
+        <span data-page-node-id="HR4U7COM6u8hI7iHqgeC0H">RapidOCR small</span>
+        <span data-page-node-id="HkErCTTUJ9BJG7KisoJCQt">0.3s</span>
+        <span data-page-node-id="cvfyPsABwppzhMot8GCpQc">156 chars</span>
+      </div>
+    </div>
+
+    <!-- 翻译结果面板（右侧） -->
+    <div class="trans-panel" id="trans-panel" style="display:none" data-page-node-id="K5xkzCVWcODs9iCS9TL0YG">
+      <div class="panel-tag" data-page-node-id="2A2peNB3BpyGpx6o72ct9u">Translation → 中文</div>
+      <div class="panel-text" id="trans-text" data-page-node-id="p8Z3PrKCFmHmmrWf4B9IU4">前列腺癌筛查指南：55-69岁男性应在充分讨论获益与危害后，个体化决定是否进行PSA筛查。</div>
+      <div class="panel-meta" data-page-node-id="1fcY8YojqNAOqhCYdIbZAH">
+        <span data-page-node-id="jAEZc0YMiqOxyl3Ms60gmF">DeepSeek-R1</span>
+        <span data-page-node-id="S6RmwFZ6rJLL7uZMbIRElD">1.2s</span>
+        <span data-page-node-id="hKab6ADvUEHG1ogwgm6D0b">置信度 98%</span>
+      </div>
+    </div>
+
+    <!-- 划词翻译浮层 -->
+    <div class="hover-trans" id="hover-trans" data-page-node-id="fmJ3gCGV093nRlY4MCBFvw">
+      <div class="ht-text" id="ht-trans" data-page-node-id="jceLqNXvbnZp7E1iwBRiAl">前列腺特异性抗原</div>
+      <div class="ht-orig" id="ht-orig" data-page-node-id="5iz6aXFp0H32cfT50C4yRn">Prostate-specific antigen</div>
+    </div>
+  </div>
+
+  <!-- 控制栏 -->
+  <div class="ctrl-bar" data-page-node-id="eU124bFGtoUn9ThU3ggBAT">
+    <button class="btn btn-p" id="btn-start" data-page-node-id="hMGuQNK6kAff5YMb9upUpf">📸 开始截图</button>
+    <button class="btn btn-g" id="btn-auto" data-page-node-id="Lbny6nYgwgROjFyuxgtosD">▶ 自动演示</button>
+    <button class="btn btn-g" id="btn-cancel" disabled data-page-node-id="E28QXgKPyiQjavpG9DXVRx">✕ 取消</button>
+    <div style="flex:1" data-page-node-id="74JIqjCKPWIIVGD7ELNB36"></div>
+    <span id="status-label" style="font-family:var(--font-m);font-size:11px;color:var(--text3)" data-page-node-id="7rju2IJ90AzN7BHIdFjRy9">IDLE — 点击开始截图</span>
+  </div>
+</div>
+
+<!-- ============================================================
+   设计决策说明
+   ============================================================ -->
+<div class="demo-section" data-page-node-id="yRIjQN1zk8PfAPDYFcTSQ7">
+  <h2 class="demo-stitle" data-page-node-id="mGxNR8zGpAgPvaw4tcgwYH">交互设计决策</h2>
+  <div class="info-grid" data-page-node-id="7SQD5BNBOrR6dc1o0Z0RpX">
+    <div class="info-card" data-page-node-id="pfsMIyHOqYW2atJKRTVCxC">
+      <div class="ic-h" data-page-node-id="AKuxkrahqDxqCRhPWGFYVQ">遮罩层</div>
+      <div class="ic-b" data-page-node-id="nDR2r0dOnnF6ayAQrkAhDi">
+        背景压暗至 <code data-page-node-id="SEirt5iRconFDLaUMYHLbE">rgba(0,0,0,.6)</code>，保留桌面元素的可识别性。<br data-page-node-id="SVR9yHLBqfjFHVN51ZyZeC"><br data-page-node-id="vJ3UuyTXzrjZNenMHZxMI9">
+        选区框使用 2px <code data-page-node-id="jfBbNeUmv2X5ArNGufiJo9">#ff6b2c</code> 边框 + 8% 透明度填充，确保在任何背景下可见。
+      </div>
+    </div>
+    <div class="info-card" data-page-node-id="Rq1g4qnfnN1Y7IQ8CPHclQ">
+      <div class="ic-h" data-page-node-id="OSxTgYcDFoCGAOoTtgLOXr">选区交互</div>
+      <div class="ic-b" data-page-node-id="gSEAv3Qh4GyRXPw90ytuRE">
+        拖拽绘制矩形，实时显示 <code data-page-node-id="lPr7Zv95feOF71XwUcrR5N">宽×高</code> 尺寸标签。<br data-page-node-id="LL0LeOWbFMNbULPo2V7y0M"><br data-page-node-id="HeZ9aZfqS7cGbe2ABlaQsG">
+        确认后进入扫描阶段，Esc 可随时取消。
+      </div>
+    </div>
+    <div class="info-card" data-page-node-id="qsLu5pVLc8sjlCARYwXfiW">
+      <div class="ic-h" data-page-node-id="JpcNcCpqgqR4VC59Q2tzWs">扫描反馈</div>
+      <div class="ic-b" data-page-node-id="9RV7qpGUR7gDcG4BH2cCiw">
+        扫描线动画 <code data-page-node-id="9YzENOETDA99hPl8GPkPvA">1.5s</code> 循环，配合琥珀橙辉光。<br data-page-node-id="3qEPi5FwhjWSCFqZN9DEUK"><br data-page-node-id="uZQSCMTsV5EyrzUcGv4sYt">
+        面板逐字淡入，翻译结果按行依次出现。
+      </div>
+    </div>
+    <div class="info-card" data-page-node-id="dNeGCxZmMSRMhQq5QUlqxC">
+      <div class="ic-h" data-page-node-id="IKNAYkM3gehKBlX9iqHyvB">结果叠加</div>
+      <div class="ic-b" data-page-node-id="3zpgVN1wSfz0DD99qPDEOO">
+        OCR 原文面板（左侧，蓝色标签）与翻译结果（右侧，橙色边框）同时展示。<br data-page-node-id="grAw1S00TJwygAopl2ha2z"><br data-page-node-id="lhHsyJqPUKyJmjX5GBva7o">
+        逐词对照悬浮翻译，鼠标悬停原文词汇即可查看对应译文。
+      </div>
+    </div>
+    <div class="info-card" data-page-node-id="EgJTyZxvUsNIynv7aNBXD9">
+      <div class="ic-h" data-page-node-id="S17m4iJ3wvycVo2JKlN7mu">划词翻译</div>
+      <div class="ic-b" data-page-node-id="uvVNLXGA1sSceJeCa1jqJl">
+        非截图模式下，选中任意应用中的文字后按 <code data-page-node-id="jtENN7XX0rq9gnq8zpDNEC">Ctrl+D</code>，弹出紧凑翻译浮层。<br data-page-node-id="9hVaBkTgNAjeod819hPA2n"><br data-page-node-id="sp7gsU6xpQcl9TEOEVr7mZ">
+        浮层跟随选区位置，自动避让屏幕边缘。
+      </div>
+    </div>
+    <div class="info-card" data-page-node-id="TC5Bmh9GguC3ZO48Qs8Hjv">
+      <div class="ic-h" data-page-node-id="UFs8bOcAYc2L1Az4Tf9vj7">性能要点</div>
+      <div class="ic-b" data-page-node-id="bA8oPsv0g73RFPqvEW97IV">
+        遮罩渲染使用 <code data-page-node-id="7o3lnVBbsHsOE9kjlo404f">position:fixed + will-change</code>，动画只动 <code data-page-node-id="EiyDHOz0HToIAKzrWa5WlG">transform</code> 和 <code data-page-node-id="U4gEjJLpFU1LUSdxHvp1es">opacity</code>。<br data-page-node-id="9kTW5p1CBFYpc4hb2sreQZ"><br data-page-node-id="i7gYhojTd0HjHuOVmTfSBL">
+        OCR 工作线程与 UI 完全解耦，通过事件总线传递结果，主线程零阻塞。
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- 进度条 -->
+<div class="progress-bar" id="progress" data-page-node-id="ltK0Ekt0n6G63W5rpfGBqV"></div>
+
+<!-- 底部操作提示 -->
+<div class="instr-bar" id="instr-bar" data-page-node-id="c1H7Ynl0EMwtE8NJjEqtjV">
+  <span data-page-node-id="l5BEukSTlFGHE1s7KGeS0b"><kbd data-page-node-id="WMiYeDk3GtxOtAiE5zynU5">鼠标拖拽</kbd> 绘制选区</span>
+  <span class="sep" data-page-node-id="cJADCq8C9GQnCkXCXqEZWe"></span>
+  <span data-page-node-id="n3WY8nJHjXBhBLeDleTXGT"><kbd data-page-node-id="QzXvSrOveEiGFIDnBIt4XG">Enter</kbd> 确认</span>
+  <span class="sep" data-page-node-id="AetyagdesBxWisRPjfZGBz"></span>
+  <span data-page-node-id="xzOI3icA4ajeqmZGp0aJK7"><kbd data-page-node-id="X4UihFRK8QNoqDIjF2C9Zz">Esc</kbd> 取消</span>
+  <span class="sep" data-page-node-id="6ejtj1F7EwCoROzZ6XL07Z"></span>
+  <span data-page-node-id="OChiEzqXPBp9uczouNXFUS"><kbd data-page-node-id="wnGMDvmgOITkISapcv6tlv">Ctrl+D</kbd> 划词翻译</span>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const $$ = s => document.querySelectorAll(s);
+
+  // ===== 状态机 =====
+  let currentState = 'idle';  // idle | overlay | selecting | scanning | results
+  let isDragging = false;
+  let dragStart = { x: 0, y: 0 };
+  let autoTimer = null;
+
+  const overlay = $('#overlay');
+  const selBox = $('#sel-box');
+  const sizeTag = $('#size-tag');
+  const opTip = $('#op-tip');
+  const ocrPanel = $('#ocr-panel');
+  const transPanel = $('#trans-panel');
+  const hoverTrans = $('#hover-trans');
+  const statusLabel = $('#status-label');
+  const progressBar = $('#progress');
+  const mainDemo = $('#main-demo');
+
+  // 模拟窗口1的边界（用于选区定位）
+  const simWin1 = $('#sim-win-1');
+
+  const setState = (state, label) => {
+    currentState = state;
+    statusLabel.textContent = label || state.toUpperCase();
+
+    // 流程步骤
+    const stepMap = { idle: 0, overlay: 1, selecting: 2, scanning: 3, results: 4 };
+    $$('.flow-step').forEach((step, i) => {
+      step.classList.toggle('active', i === stepMap[state]);
+      step.classList.toggle('done', i < stepMap[state]);
+    });
+
+    // 状态卡片
+    $$('.state-card').forEach(card => {
+      const demo = card.dataset.demo;
+      card.classList.toggle('active-card', demo === state || (state === 'overlay' && demo === 'overlay'));
+    });
+  };
+
+  // ===== 开始截图 =====
+  $('#btn-start').addEventListener('click', () => {
+    // 显示遮罩
+    overlay.style.display = 'block';
+    selBox.classList.remove('active');
+    sizeTag.classList.remove('active');
+    ocrPanel.style.display = 'none';
+    transPanel.style.display = 'none';
+
+    // 自动在模拟窗口上画一个选区（演示用）
+    const rect = simWin1.getBoundingClientRect();
+    const demoRect = mainDemo.getBoundingClientRect();
+    const relX = rect.left - demoRect.left + 10;
+    const relY = rect.top - demoRect.top + 30;
+    const w = 200, h = 55;
+
+    // 先显示提示
+    setState('overlay', 'OVERLAY — 点击开始截图');
+    opTip.querySelector('span').textContent = '拖拽选择区域或点击「自动演示」';
+
+    // 自动进入选区状态
+    setTimeout(() => {
+      isDragging = true;
+      dragStart = { x: relX, y: relY };
+      selBox.classList.add('active');
+      sizeTag.classList.add('active');
+      selBox.style.left = relX + 'px';
+      selBox.style.top = relY + 'px';
+      selBox.style.width = w + 'px';
+      selBox.style.height = h + 'px';
+      sizeTag.style.left = (relX + w + 6) + 'px';
+      sizeTag.style.top = relY + 'px';
+      sizeTag.textContent = w + ' × ' + h;
+      setState('selecting', 'SELECTING — 拖拽绘制选区');
+
+      // 模拟扫描阶段
+      setTimeout(() => {
+        setState('scanning', 'SCANNING — RapidOCR 识别中...');
+        progressBar.classList.add('active');
+        let p = 0;
+        const pi = setInterval(() => {
+          p += 2; progressBar.style.width = p + '%';
+          if (p >= 100) {
+            clearInterval(pi);
+            progressBar.classList.remove('active');
+            progressBar.style.width = '0';
+            // 显示结果
+            showResults();
+          }
+        }, 30);
+      }, 800);
+    }, 400);
+  });
+
+  // ===== 显示结果 =====
+  function showResults() {
+    setState('results', 'RESULTS — 翻译完成');
+    ocrPanel.style.display = 'block';
+    transPanel.style.display = 'block';
+    opTip.style.display = 'none';
+  }
+
+  // ===== 自动演示 =====
+  $('#btn-auto').addEventListener('click', () => {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    // 重置
+    ocrPanel.style.display = 'none';
+    transPanel.style.display = 'none';
+    overlay.style.display = 'block';
+    selBox.classList.remove('active');
+    sizeTag.classList.remove('active');
+
+    setState('overlay', 'AUTO DEMO — 自动演示流程');
+
+    // Step 1: 遮罩
+    setTimeout(() => {
+      // Step 2: 选区
+      const rect = simWin1.getBoundingClientRect();
+      const demoRect = mainDemo.getBoundingClientRect();
+      const x = rect.left - demoRect.left + 10;
+      const y = rect.top - demoRect.top + 30;
+      selBox.classList.add('active');
+      sizeTag.classList.add('active');
+      selBox.style.left = x + 'px';
+      selBox.style.top = y + 'px';
+      selBox.style.width = '200px';
+      selBox.style.height = '55px';
+      sizeTag.style.left = (x + 206) + 'px';
+      sizeTag.style.top = y + 'px';
+      sizeTag.textContent = '200 × 55';
+      setState('selecting', 'AUTO — 选区完成');
+
+      // Step 3: 扫描
+      setTimeout(() => {
+        setState('scanning', 'AUTO — OCR 扫描中...');
+        progressBar.classList.add('active');
+        let p = 0;
+        const pi = setInterval(() => {
+          p += 2;
+          progressBar.style.width = p + '%';
+          if (p >= 100) {
+            clearInterval(pi);
+            progressBar.classList.remove('active');
+            progressBar.style.width = '0';
+            showResults();
+          }
+        }, 30);
+      }, 1000);
+    }, 800);
+  });
+
+  // ===== 取消 =====
+  $('#btn-cancel').addEventListener('click', reset);
+
+  function reset() {
+    overlay.style.display = 'none';
+    selBox.classList.remove('active');
+    sizeTag.classList.remove('active');
+    ocrPanel.style.display = 'none';
+    transPanel.style.display = 'none';
+    opTip.style.display = 'flex';
+    opTip.querySelector('span').textContent = '拖拽选择区域';
+    progressBar.classList.remove('active');
+    progressBar.style.width = '0';
+    setState('idle', 'IDLE — 点击开始截图');
+  }
+
+  // ===== 主演示区拖拽 =====
+  let mDown = false, mStart = {x:0,y:0};
+  mainDemo.addEventListener('mousedown', e => {
+    if (e.target.closest('.op-tip')) return;
+    mDown = true;
+    const rect = mainDemo.getBoundingClientRect();
+    mStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  });
+  mainDemo.addEventListener('mousemove', e => {
+    if (!mDown) return;
+    const rect = mainDemo.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    const x = Math.min(mStart.x, cx);
+    const y = Math.min(mStart.y, cy);
+    const w = Math.abs(cx - mStart.x);
+    const h = Math.abs(cy - mStart.y);
+    if (w > 5 && h > 5) {
+      selBox.classList.add('active');
+      sizeTag.classList.add('active');
+      selBox.style.left = x + 'px';
+      selBox.style.top = y + 'px';
+      selBox.style.width = w + 'px';
+      selBox.style.height = h + 'px';
+      sizeTag.style.left = (x + w + 6) + 'px';
+      sizeTag.style.top = y + 'px';
+      sizeTag.textContent = Math.round(w) + ' × ' + Math.round(h);
+    }
+  });
+  mainDemo.addEventListener('mouseup', () => { mDown = false; });
+
+  // ===== 状态卡片点击 =====
+  $$('.state-card').forEach(card => {
+    card.addEventListener('click', () => {
+      $$('.state-card').forEach(c => c.classList.remove('active-card'));
+      card.classList.add('active-card');
+      const demo = card.dataset.demo;
+      // 快速跳转
+      if (demo === 'overlay') { reset(); $('#btn-start').click(); }
+      else if (demo === 'selection') { reset(); $('#btn-start').click(); }
+      else if (demo === 'scanning') { reset(); $('#btn-start').click(); }
+      else if (demo === 'results') { reset(); $('#btn-start').click(); }
+    });
+  });
+
+  // ===== Esc 取消 =====
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && currentState !== 'idle') reset();
+  });
+
+  // ===== 初始化 =====
+  setState('idle');
+})();
+</script>
+</body>
+</html>

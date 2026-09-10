@@ -8,6 +8,7 @@
 这条界限是 2.0 最大的结构问题所在 —— 那边 UI 函数里直接调 OCR、
 直接读写全局 _last_text、直接决定回退引擎，导致想换界面就得重写业务。
 """
+
 from __future__ import annotations
 
 import logging
@@ -15,8 +16,14 @@ import tkinter as tk
 from tkinter import ttk
 
 from . import theme
-from .dialogs import (open_about, open_api_settings, open_history,
-                      open_hotkey_settings, open_knowledge, open_plugins)
+from .dialogs import (
+    open_about,
+    open_api_settings,
+    open_history,
+    open_hotkey_settings,
+    open_knowledge,
+    open_plugins,
+)
 from .guards import ui_thread
 from .project_bar import FlowFrame, ProjectTabBar, open_manage_projects
 from .sticker import StickerWindow
@@ -28,8 +35,8 @@ class MainWindow:
         self.app = ui.app
         self.root = ui.root
 
-        self.last_text = ""            # 最近一次识别原文（AI 面板拿它当上下文）
-        self.last_image = None         # 最近一次截图（AI 面板可选带上）
+        self.last_text = ""  # 最近一次识别原文（AI 面板拿它当上下文）
+        self.last_image = None  # 最近一次截图（AI 面板可选带上）
         self.chat = None
         self.chat_visible = False
 
@@ -50,6 +57,9 @@ class MainWindow:
             self.root.attributes("-topmost", True)
         except Exception:
             pass
+
+        # TTS 朗读进度蒙版：当前高亮的 Text 控件引用
+        self._tts_widget = None
 
     # ==================================================================
     # 构建
@@ -74,33 +84,58 @@ class MainWindow:
         g_input = ttk.Frame(band)
         self.btn_snap = theme.accent_button(g_input, "📸 截图识别", self.ui.do_snap)
         self.btn_snap.pack(side=tk.LEFT, padx=2)
-        self.btn_paste = ttk.Button(g_input, text="📋 粘贴图片", command=self.ui.do_clipboard)
+        self.btn_paste = ttk.Button(
+            g_input, text="📋 粘贴图片", command=self.ui.do_clipboard
+        )
         self.btn_paste.pack(side=tk.LEFT, padx=2)
-        self.btn_file = ttk.Button(g_input, text="📂 打开文件", command=self.ui.do_open_file)
+        self.btn_file = ttk.Button(
+            g_input, text="📂 打开文件", command=self.ui.do_open_file
+        )
         self.btn_file.pack(side=tk.LEFT, padx=2)
         self.btn_mask = theme.accent_button(
-            g_input, "🎭 蒙版翻译", lambda: self.ui.run_capsule("mask_translate"))
+            g_input, "🎭 蒙版翻译", lambda: self.ui.run_capsule("mask_translate")
+        )
         self.btn_mask.pack(side=tk.LEFT, padx=2)
         band.add_group(g_input)
 
         # 组：系统
         g_sys = ttk.Frame(band)
-        ttk.Separator(g_sys, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=(2, 6), fill=tk.Y)
-        ttk.Button(g_sys, text="历史记录", command=lambda: open_history(self)).pack(side=tk.LEFT)
-        ttk.Button(g_sys, text="知识库", command=lambda: open_knowledge(self)).pack(side=tk.LEFT)
-        ttk.Button(g_sys, text="插件", command=lambda: open_plugins(self)).pack(side=tk.LEFT)
-        ttk.Button(g_sys, text="关于", command=lambda: open_about(self)).pack(side=tk.LEFT)
-        ttk.Button(g_sys, text="API 设置", command=lambda: open_api_settings(self)).pack(side=tk.LEFT)
-        ttk.Button(g_sys, text="热键设置", command=lambda: open_hotkey_settings(self)).pack(side=tk.LEFT)
-        ttk.Button(g_sys, text="管理项目", command=lambda: open_manage_projects(self)).pack(side=tk.LEFT)
+        ttk.Separator(g_sys, orient=tk.VERTICAL).pack(
+            side=tk.LEFT, padx=(2, 6), fill=tk.Y
+        )
+        ttk.Button(g_sys, text="历史记录", command=lambda: open_history(self)).pack(
+            side=tk.LEFT
+        )
+        ttk.Button(g_sys, text="知识库", command=lambda: open_knowledge(self)).pack(
+            side=tk.LEFT
+        )
+        ttk.Button(g_sys, text="插件", command=lambda: open_plugins(self)).pack(
+            side=tk.LEFT
+        )
+        ttk.Button(g_sys, text="关于", command=lambda: open_about(self)).pack(
+            side=tk.LEFT
+        )
+        ttk.Button(
+            g_sys, text="API 设置", command=lambda: open_api_settings(self)
+        ).pack(side=tk.LEFT)
+        ttk.Button(
+            g_sys, text="热键设置", command=lambda: open_hotkey_settings(self)
+        ).pack(side=tk.LEFT)
+        ttk.Button(
+            g_sys, text="管理项目", command=lambda: open_manage_projects(self)
+        ).pack(side=tk.LEFT)
         band.add_group(g_sys)
 
         # 组：信息（OCR/引擎标签 + 忙时进度条）
         g_info = ttk.Frame(band)
-        ttk.Separator(g_info, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=(2, 6), fill=tk.Y)
+        ttk.Separator(g_info, orient=tk.VERTICAL).pack(
+            side=tk.LEFT, padx=(2, 6), fill=tk.Y
+        )
         ocr = self.app.services.get("ocr")
         ocr_name = getattr(ocr, "display_name", "未配置") if ocr else "未配置"
-        self.ocr_label = ttk.Label(g_info, text=f"OCR: {ocr_name}", foreground=theme.TEXT_MUTED)
+        self.ocr_label = ttk.Label(
+            g_info, text=f"OCR: {ocr_name}", foreground=theme.TEXT_MUTED
+        )
         self.ocr_label.pack(side=tk.LEFT)
         self.engine_label = ttk.Label(g_info, text="", foreground=theme.TEXT_MUTED)
         self.engine_label.pack(side=tk.LEFT, padx=(12, 0))
@@ -116,23 +151,37 @@ class MainWindow:
         self.simple_flow = sf
 
         g_out = ttk.Frame(sf)
-        self.btn_sim_copy = ttk.Button(g_out, text="复制译文", command=self.copy_translation)
+        self.btn_sim_copy = ttk.Button(
+            g_out, text="复制译文", command=self.copy_translation
+        )
         self.btn_sim_copy.pack(side=tk.LEFT, padx=2)
-        self.btn_sim_retry = ttk.Button(g_out, text="重新翻译", command=lambda: self.ui.do_translate())
+        self.btn_sim_retry = ttk.Button(
+            g_out, text="重新翻译", command=lambda: self.ui.do_translate()
+        )
         self.btn_sim_retry.pack(side=tk.LEFT, padx=2)
-        self.btn_sim_read = ttk.Button(g_out, text="🔊 朗读", command=self.ui.do_tts_read)
+        self.btn_sim_read = ttk.Button(
+            g_out, text="🔊 朗读", command=self.ui.do_tts_read
+        )
         self.btn_sim_read.pack(side=tk.LEFT, padx=2)
-        ttk.Button(g_out, text="存知识库", command=self.save_to_knowledge).pack(side=tk.LEFT, padx=2)
+        ttk.Button(g_out, text="存知识库", command=self.save_to_knowledge).pack(
+            side=tk.LEFT, padx=2
+        )
         sf.add_group(g_out)
 
         g_tool = ttk.Frame(sf)
-        self.btn_sim_chat = ttk.Button(g_tool, text="AI 对话 ▼", command=self.toggle_chat)
+        self.btn_sim_chat = ttk.Button(
+            g_tool, text="AI 对话 ▼", command=self.toggle_chat
+        )
         self.btn_sim_chat.pack(side=tk.LEFT, padx=2)
         self.btn_sim_clear = ttk.Button(g_tool, text="清空", command=self.clear_all)
         self.btn_sim_clear.pack(side=tk.LEFT, padx=2)
-        self.btn_sim_hot = ttk.Button(g_tool, text="热键设置", command=lambda: open_hotkey_settings(self))
+        self.btn_sim_hot = ttk.Button(
+            g_tool, text="热键设置", command=lambda: open_hotkey_settings(self)
+        )
         self.btn_sim_hot.pack(side=tk.LEFT, padx=2)
-        self.btn_sim_adv = ttk.Button(g_tool, text="高级 ▼", command=lambda: self.switch_ui_mode("advanced"))
+        self.btn_sim_adv = ttk.Button(
+            g_tool, text="高级 ▼", command=lambda: self.switch_ui_mode("advanced")
+        )
         self.btn_sim_adv.pack(side=tk.LEFT, padx=(8, 2))
         sf.add_group(g_tool)
 
@@ -141,32 +190,50 @@ class MainWindow:
         self.advanced_flow = af
 
         g_out2 = ttk.Frame(af)
-        self.btn_copy_orig = ttk.Button(g_out2, text="复制原文", command=self.copy_original)
+        self.btn_copy_orig = ttk.Button(
+            g_out2, text="复制原文", command=self.copy_original
+        )
         self.btn_copy_orig.pack(side=tk.LEFT, padx=2)
-        self.btn_copy_trans = ttk.Button(g_out2, text="复制译文", command=self.copy_translation)
+        self.btn_copy_trans = ttk.Button(
+            g_out2, text="复制译文", command=self.copy_translation
+        )
         self.btn_copy_trans.pack(side=tk.LEFT, padx=2)
         self.btn_copy_all = ttk.Button(g_out2, text="复制全部", command=self.copy_all)
         self.btn_copy_all.pack(side=tk.LEFT, padx=2)
         af.add_group(g_out2)
 
         g_tr = ttk.Frame(af)
-        self.btn_zh = ttk.Button(g_tr, text="译中", command=lambda: self.ui.do_translate("zh-CN"))
+        self.btn_zh = ttk.Button(
+            g_tr, text="译中", command=lambda: self.ui.do_translate("zh-CN")
+        )
         self.btn_zh.pack(side=tk.LEFT, padx=2)
-        self.btn_en = ttk.Button(g_tr, text="译英", command=lambda: self.ui.do_translate("en"))
+        self.btn_en = ttk.Button(
+            g_tr, text="译英", command=lambda: self.ui.do_translate("en")
+        )
         self.btn_en.pack(side=tk.LEFT, padx=2)
-        self.btn_cycle = ttk.Button(g_tr, text="切换引擎", command=self.ui.do_switch_engine)
+        self.btn_cycle = ttk.Button(
+            g_tr, text="切换引擎", command=self.ui.do_switch_engine
+        )
         self.btn_cycle.pack(side=tk.LEFT, padx=2)
         af.add_group(g_tr)
 
         g_tool2 = ttk.Frame(af)
         self.btn_adv_clear = ttk.Button(g_tool2, text="清场", command=self.clear_all)
         self.btn_adv_clear.pack(side=tk.LEFT, padx=2)
-        self.btn_adv_read = ttk.Button(g_tool2, text="🔊 朗读", command=self.ui.do_tts_read)
+        self.btn_adv_read = ttk.Button(
+            g_tool2, text="🔊 朗读", command=self.ui.do_tts_read
+        )
         self.btn_adv_read.pack(side=tk.LEFT, padx=2)
-        self.btn_adv_chat = ttk.Button(g_tool2, text="AI 对话 ▼", command=self.toggle_chat)
+        self.btn_adv_chat = ttk.Button(
+            g_tool2, text="AI 对话 ▼", command=self.toggle_chat
+        )
         self.btn_adv_chat.pack(side=tk.LEFT, padx=2)
-        ttk.Button(g_tool2, text="存知识库", command=self.save_to_knowledge).pack(side=tk.LEFT, padx=2)
-        self.btn_adv_simple = ttk.Button(g_tool2, text="简洁 ▲", command=lambda: self.switch_ui_mode("simple"))
+        ttk.Button(g_tool2, text="存知识库", command=self.save_to_knowledge).pack(
+            side=tk.LEFT, padx=2
+        )
+        self.btn_adv_simple = ttk.Button(
+            g_tool2, text="简洁 ▲", command=lambda: self.switch_ui_mode("simple")
+        )
         self.btn_adv_simple.pack(side=tk.LEFT, padx=(8, 2))
         af.add_group(g_tool2)
 
@@ -179,15 +246,25 @@ class MainWindow:
         pane.pack(fill=tk.BOTH, expand=True)
 
         # 深色模式下 tk.Text 默认白底黑字，必须显式跟随调色板（ttk 管不到它）
-        _txt_colors = dict(bg=theme.INPUT_BG, fg=theme.TEXT_MAIN,
-                           insertbackground=theme.TEXT_MAIN,
-                           selectbackground=theme.ACCENT, selectforeground="white")
+        _txt_colors = dict(
+            bg=theme.INPUT_BG,
+            fg=theme.TEXT_MAIN,
+            insertbackground=theme.TEXT_MAIN,
+            selectbackground=theme.ACCENT,
+            selectforeground="white",
+        )
 
         f1 = ttk.LabelFrame(pane, text="原文", padding=4)
-        self.txt_original = tk.Text(f1, wrap=tk.WORD, font=theme.MONO_FONT,
-                                    undo=True, relief=tk.FLAT,
-                                    highlightthickness=1, highlightbackground=theme.BORDER,
-                                    **_txt_colors)
+        self.txt_original = tk.Text(
+            f1,
+            wrap=tk.WORD,
+            font=theme.MONO_FONT,
+            undo=True,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground=theme.BORDER,
+            **_txt_colors,
+        )
         sb1 = ttk.Scrollbar(f1, orient=tk.VERTICAL, command=self.txt_original.yview)
         self.txt_original.configure(yscrollcommand=sb1.set)
         sb1.pack(side=tk.RIGHT, fill=tk.Y)
@@ -197,12 +274,19 @@ class MainWindow:
         # 译文区同样可编辑：OCR 难免有错字、机翻难免有生硬处，
         # 让人当场改掉再复制走，比「只读 + 粘到别处再改」顺手得多。
         self.trans_frame = ttk.LabelFrame(pane, text="译文（可编辑）", padding=4)
-        self.txt_translated = tk.Text(self.trans_frame, wrap=tk.WORD, font=theme.UI_FONT,
-                                      undo=True, relief=tk.FLAT,
-                                      highlightthickness=1, highlightbackground=theme.BORDER,
-                                      **_txt_colors)
-        sb2 = ttk.Scrollbar(self.trans_frame, orient=tk.VERTICAL,
-                            command=self.txt_translated.yview)
+        self.txt_translated = tk.Text(
+            self.trans_frame,
+            wrap=tk.WORD,
+            font=theme.UI_FONT,
+            undo=True,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground=theme.BORDER,
+            **_txt_colors,
+        )
+        sb2 = ttk.Scrollbar(
+            self.trans_frame, orient=tk.VERTICAL, command=self.txt_translated.yview
+        )
         self.txt_translated.configure(yscrollcommand=sb2.set)
         sb2.pack(side=tk.RIGHT, fill=tk.Y)
         self.txt_translated.pack(fill=tk.BOTH, expand=True)
@@ -219,14 +303,17 @@ class MainWindow:
         """Tk 的 Text 默认缺 Ctrl+A / 右键菜单，中文用户会以为控件坏了。"""
         menu = tk.Menu(box, tearoff=0)
         menu.add_command(label="剪切", command=lambda: self._edit_event(box, "<<Cut>>"))
-        menu.add_command(label="复制", command=lambda: self._edit_event(box, "<<Copy>>"))
-        menu.add_command(label="粘贴", command=lambda: self._edit_event(box, "<<Paste>>"))
+        menu.add_command(
+            label="复制", command=lambda: self._edit_event(box, "<<Copy>>")
+        )
+        menu.add_command(
+            label="粘贴", command=lambda: self._edit_event(box, "<<Paste>>")
+        )
         menu.add_separator()
         menu.add_command(label="全选", command=lambda: self._select_all(box))
         menu.add_command(label="清空", command=lambda: box.delete("1.0", tk.END))
         menu.add_separator()
-        menu.add_command(label="翻译选中内容",
-                         command=lambda: self.ui.do_translate())
+        menu.add_command(label="翻译选中内容", command=lambda: self.ui.do_translate())
 
         def _popup(event):
             try:
@@ -256,12 +343,18 @@ class MainWindow:
     def _build_chat_area(self) -> None:
         """对话面板先构建、后隐藏 —— 构建即显示会把原文区压成几十像素（2.0 踩过）。"""
         from .chat_panel import ChatPanel
+
         self.chat = ChatPanel(self.main_pane, self.ui, self)
         self.chat_visible = False
 
     def _build_status_bar(self) -> None:
-        self.status_label = ttk.Label(self.root, text="就绪", foreground=theme.TEXT_MUTED,
-                                      padding=(8, 3), anchor=tk.W)
+        self.status_label = ttk.Label(
+            self.root,
+            text="就绪",
+            foreground=theme.TEXT_MUTED,
+            padding=(8, 3),
+            anchor=tk.W,
+        )
         self.status_label.pack(fill=tk.X, side=tk.BOTTOM)
 
     # ==================================================================
@@ -292,12 +385,16 @@ class MainWindow:
         try:
             self.txt_translated.delete("1.0", tk.END)
             self.txt_translated.insert("1.0", text)
-            self.txt_translated.edit_reset()      # 新译文另起一段撤销历史
+            self.txt_translated.edit_reset()  # 新译文另起一段撤销历史
         except Exception:
             return
         # 标题跟着实际译出的语种走，一眼能看出现在是中还是英
         try:
-            label = f"译文 · {self.lang_label(target)}（可编辑）" if target else "译文（可编辑）"
+            label = (
+                f"译文 · {self.lang_label(target)}（可编辑）"
+                if target
+                else "译文（可编辑）"
+            )
             self.trans_frame.config(text=label)
         except Exception:
             pass
@@ -323,7 +420,7 @@ class MainWindow:
             else:
                 self.progress.stop()
                 self.progress.pack_forget()
-            self.merged_band.relayout()      # 进度条出现/消失会改变信息组宽度
+            self.merged_band.relayout()  # 进度条出现/消失会改变信息组宽度
         except Exception:
             pass
 
@@ -364,6 +461,74 @@ class MainWindow:
                 continue
         return ""
 
+    def tts_source_widget(self):
+        """返回 (text, widget) —— 用户最可能想朗读的文本及其来源控件。
+
+        优先级：选中 → 译文 → 原文。widget 是对应的 Text 控件，
+        供 tts_highlight_start 定位蒙版。
+        """
+        for box in (self.txt_original, self.txt_translated):
+            try:
+                if box.tag_ranges(tk.SEL):
+                    return box.get(tk.SEL_FIRST, tk.SEL_LAST).strip(), box
+            except Exception:
+                continue
+        text = self.get_translation().strip()
+        if text:
+            return text, self.txt_translated
+        return self.get_original().strip(), self.txt_original
+
+    # ---- TTS 朗读进度蒙版：淡蓝透亮高亮，读到哪里蒙版跟到哪里 ----
+    _TTS_TAG = "tts_highlight"
+
+    @ui_thread
+    def tts_highlight_start(self, widget) -> None:
+        """开始 TTS 朗读进度蒙版。widget 是目标 Text 控件。"""
+        self._tts_widget = widget
+        if widget is None:
+            return
+        try:
+            # 淡蓝透亮蒙版：浅色模式淡蓝底，深色模式深蓝底
+            mode = theme.current_mode()
+            bg = "#CCE4FF" if mode == "light" else "#1a3a5c"
+            widget.tag_configure(self._TTS_TAG, background=bg)
+            widget.tag_remove(self._TTS_TAG, "1.0", "end")
+        except Exception:
+            pass
+
+    @ui_thread
+    def tts_highlight_update(self, offset: int, length: int) -> None:
+        """更新蒙版位置到当前朗读的文本段。
+
+        offset/length 为字符偏移（基于传给 speak 的文本）。
+        """
+        widget = self._tts_widget
+        if widget is None:
+            return
+        try:
+            widget.tag_remove(self._TTS_TAG, "1.0", "end")
+            if length <= 0:
+                return
+            start = widget.index(f"1.0 + {offset} chars")
+            end = widget.index(f"1.0 + {offset + length} chars")
+            widget.tag_add(self._TTS_TAG, start, end)
+            # 滚动使当前朗读段可见
+            widget.see(start)
+        except Exception:
+            pass
+
+    @ui_thread
+    def tts_highlight_stop(self) -> None:
+        """停止蒙版，清除所有高亮。"""
+        widget = self._tts_widget
+        self._tts_widget = None
+        if widget is None:
+            return
+        try:
+            widget.tag_remove(self._TTS_TAG, "1.0", "end")
+        except Exception:
+            pass
+
     # ---- 划词小贴条：选区/划词结果的一个独立悬浮窗 ----
     def _build_sticker(self) -> None:
         self.sticker = StickerWindow(self.root, ui=self.ui)
@@ -377,21 +542,26 @@ class MainWindow:
             # 不再静默吞掉：写进 selection.log 便于远程定位（图贴卡死时关键线索）
             try:
                 from .app import _sel_log_static
+
                 _sel_log_static("show_sticker error: %r" % (e,), logging.ERROR)
             except Exception:
                 pass
         else:
             try:
                 from .app import _sel_log_static
+
                 _sel_log_static(
                     "show_sticker ok orig=%d tran=%d"
-                    % (len(original or ""), len(translation or "")), logging.DEBUG)
+                    % (len(original or ""), len(translation or "")),
+                    logging.DEBUG,
+                )
             except Exception:
                 pass
 
     @staticmethod
     def lang_label(code: str) -> str:
         from ...core.types import Lang
+
         return Lang.label(Lang.normalize(code))
 
     # ==================================================================
@@ -401,7 +571,7 @@ class MainWindow:
         self.app.config.ui.mode = mode
         self.apply_ui_mode(mode)
         try:
-            self.app.config.save()        # 单一 TOML，不再改写可执行的 .py
+            self.app.config.save()  # 单一 TOML，不再改写可执行的 .py
         except Exception as e:
             self.set_status(f"界面模式保存失败: {e}")
 
@@ -456,8 +626,10 @@ class MainWindow:
 
     def _sync_chat_labels(self) -> None:
         arrow = "▲" if self.chat_visible else "▼"
-        for btn, tpl in ((self.btn_sim_chat, "AI 对话 {}"),
-                         (self.btn_adv_chat, "AI 对话 {}")):
+        for btn, tpl in (
+            (self.btn_sim_chat, "AI 对话 {}"),
+            (self.btn_adv_chat, "AI 对话 {}"),
+        ):
             try:
                 btn.config(text=tpl.format(arrow))
             except Exception:
@@ -497,8 +669,12 @@ class MainWindow:
             self.set_status("没有可保存的内容")
             return
         try:
-            rec = {"source_type": "manual", "scene": "",
-                   "ocr_text": ocr, "translate_text": tr}
+            rec = {
+                "source_type": "manual",
+                "scene": "",
+                "ocr_text": ocr,
+                "translate_text": tr,
+            }
             rid = self.app.pipeline.save_knowledge(rec)
             self.set_status(f"已保存到知识库（ID={rid}）")
         except Exception as e:
@@ -512,7 +688,7 @@ class MainWindow:
         try:
             self.root.clipboard_clear()
             self.root.clipboard_append(text)
-            self.root.update()          # 保证退出后剪贴板内容仍在
+            self.root.update()  # 保证退出后剪贴板内容仍在
             self.set_status(f"已复制{what}（{len(text)} 字）")
         except Exception as e:
             self.set_status(f"复制失败: {e}")
@@ -524,7 +700,9 @@ class MainWindow:
         self._copy(self.get_translation(), "译文")
 
     def copy_all(self) -> None:
-        self._copy(f"{self.get_original()}\n\n--- 翻译 ---\n{self.get_translation()}", "全文")
+        self._copy(
+            f"{self.get_original()}\n\n--- 翻译 ---\n{self.get_translation()}", "全文"
+        )
 
     # ==================================================================
     def _engine_display(self, name: str) -> str:

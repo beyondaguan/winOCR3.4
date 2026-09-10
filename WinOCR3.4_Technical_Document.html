@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WinOCR 3.4 技术文档 - 架构设计与界面规范</title>
+<style>
+:root {
+  --brand: #6366f0;
+  --brand-light: #a5b4fc;
+  --surface: #ffffff;
+  --surface-muted: #f8fafc;
+  --surface-alt: #f1f5f9;
+  --text: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --border: #e2e8f0;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #3b82f6;
+  --radius: 8px;
+  --radius-card: 12px;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Noto Sans CJK SC', sans-serif;
+  --font-mono: 'SF Mono', 'JetBrains Mono', 'Cascadia Code', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: var(--font-sans);
+  background: var(--surface);
+  color: var(--text);
+  line-height: 1.6;
+  padding: 40px 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+h1 {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+  border-bottom: 3px solid var(--brand);
+  padding-bottom: 12px;
+}
+h2 {
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 48px 0 20px 0;
+  padding-left: 12px;
+  border-left: 4px solid var(--brand);
+}
+h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 28px 0 12px 0;
+}
+p { margin-bottom: 16px; color: var(--text-secondary); }
+.subtitle { font-size: 1.1rem; color: var(--text-muted); margin-bottom: 32px; }
+.toc {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  margin: 32px 0;
+}
+.toc-title { font-weight: 600; margin-bottom: 12px; color: var(--text); }
+.toc ul { list-style: none; padding-left: 0; }
+.toc li { padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.toc li:last-child { border-bottom: none; }
+.toc a { color: var(--brand); text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+.diagram-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  margin: 24px 0;
+  overflow-x: auto;
+}
+.diagram-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  text-align: center;
+}
+svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+.section { margin-bottom: 48px; }
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin: 24px 0;
+}
+.card {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.card-title { font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.card p { font-size: 0.9rem; margin-bottom: 0; }
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-right: 6px;
+}
+.tag-brand { background: #ede9fe; color: #6d28d9; }
+.tag-success { background: #d1fae5; color: #065f46; }
+.tag-info { background: #dbeafe; color: #1e40af; }
+.tag-warning { background: #fef3c7; color: #92400e; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+  font-size: 0.9rem;
+}
+th, td {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+th { background: var(--surface-muted); font-weight: 600; }
+code {
+  font-family: var(--font-mono);
+  background: var(--surface-alt);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+.footer {
+  margin-top: 64px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<h1>WinOCR 3.4 技术文档</h1>
+<p class="subtitle">截图识字 · 离线翻译 · AI 解读 —— 六轴插件化架构设计与界面规范</p>
+
+<div class="toc">
+  <div class="toc-title">目录</div>
+  <ul>
+    <li><a href="#overview">1. 项目概述</a></li>
+    <li><a href="#architecture">2. 系统架构设计</a></li>
+    <li><a href="#ui-design">3. UI 界面设计规范</a></li>
+    <li><a href="#data-flow">4. 数据流设计</a></li>
+    <li><a href="#tech-stack">5. 技术栈选型</a></li>
+    <li><a href="#plugin">6. 插件系统设计</a></li>
+    <li><a href="#roadmap">7. 开发路线图</a></li>
+    <li><a href="#security">8. 安全与隐私设计</a></li>
+  </ul>
+</div>
+
+<!-- 1. 项目概述 -->
+<div class="section" id="overview">
+<h2>1. 项目概述</h2>
+<p>WinOCR 3.4 是一款插件化的 Windows 桌面工具，集截图 OCR 识别、离线神经翻译、AI 对话解读于一体。采用纯 Python + Tkinter 构建，无需第三方 GUI 框架，支持绿色免安装运行。</p>
+
+<div class="card-grid">
+  <div class="card">
+    <div class="card-title">核心能力</div>
+    <p>截图 OCR · 剪贴板 OCR · 划词翻译 · AI 解读 · TTS 朗读 · 知识库</p>
+  </div>
+  <div class="card">
+    <div class="card-title">架构特色</div>
+    <p>六轴插件化（capture/ocr/translate/ai/attach/persistence）+ 组合根 + 事件总线</p>
+  </div>
+  <div class="card">
+    <div class="card-title">目标用户</div>
+    <p>需要频繁进行屏幕取词、文献翻译、文本处理的 Windows 用户</p>
+  </div>
+  <div class="card">
+    <div class="card-title">分发方式</div>
+    <p>PyInstaller onedir 双 exe（GUI + CLI），绿色免安装</p>
+  </div>
+</div>
+</div>
+
+<!-- 2. 系统架构设计 -->
+<div class="section" id="architecture">
+<h2>2. 系统架构设计</h2>
+<h3>2.1 六轴插件化架构总览</h3>
+<p>系统采用分层架构，严格遵循依赖方向铁律：<code>core</code> 不依赖 <code>services</code>，<code>services</code> 不依赖 <code>ui</code>。各轴通过抽象基类定义契约，插件注册表自动发现并装配。</p>
+
+<div class="diagram-container">
+  <div class="diagram-title">图 1：WinOCR 3.4 系统架构图</div>
+<svg viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#64748b"/>
+    </marker>
+    <linearGradient id="grad-core" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f0"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="grad-svc" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981"/>
+      <stop offset="100%" style="stop-color:#34d399"/>
+    </linearGradient>
+    <linearGradient id="grad-ui" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b"/>
+      <stop offset="100%" style="stop-color:#fbbf24"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景层 -->
+  <rect x="20" y="20" width="860" height="560" rx="12" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- UI 层 -->
+  <rect x="40" y="40" width="820" height="100" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="80" y="70" font-size="14" font-weight="600" fill="#92400e">UI 层 (Presentation Layer)</text>
+  <rect x="60" y="80" width="140" height="45" rx="6" fill="#fff" stroke="#f59e0b" stroke-width="1"/>
+  <text x="130" y="108" font-size="11" text-anchor="middle" fill="#475569">Tk MainWindow</text>
+  <rect x="220" y="80" width="140" height="45" rx="6" fill="#fff" stroke="#f59e0b" stroke-width="1"/>
+  <text x="290" y="108" font-size="11" text-anchor="middle" fill="#475569">Mask Overlay</text>
+  <rect x="380" y="80" width="140" height="45" rx="6" fill="#fff" stroke="#f59e0b" stroke-width="1"/>
+  <text x="450" y="108" font-size="11" text-anchor="middle" fill="#475569">Chat Panel</text>
+  <rect x="540" y="80" width="140" height="45" rx="6" fill="#fff" stroke="#f59e0b" stroke-width="1"/>
+  <text x="610" y="108" font-size="11" text-anchor="middle" fill="#475569">System Tray</text>
+  <rect x="700" y="80" width="140" height="45" rx="6" fill="#fff" stroke="#f59e0b" stroke-width="1"/>
+  <text x="770" y="108" font-size="11" text-anchor="middle" fill="#475569">Dialogs</text>
+
+  <!-- Services 层 -->
+  <rect x="40" y="170" width="820" height="180" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="1.5"/>
+  <text x="80" y="200" font-size="14" font-weight="600" fill="#065f46">Services 层 (六轴插件)</text>
+
+  <!-- 六轴 -->
+  <rect x="60" y="215" width="120" height="55" rx="6" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="120" y="240" font-size="11" text-anchor="middle" font-weight="600" fill="#065f46">Capture</text>
+  <text x="120" y="258" font-size="9" text-anchor="middle" fill="#64748b">截图/剪贴板/文件</text>
+
+  <rect x="200" y="215" width="120" height="55" rx="6" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="260" y="240" font-size="11" text-anchor="middle" font-weight="600" fill="#065f46">OCR</text>
+  <text x="260" y="258" font-size="9" text-anchor="middle" fill="#64748b">RapidOCR/视觉</text>
+
+  <rect x="340" y="215" width="120" height="55" rx="6" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="400" y="240" font-size="11" text-anchor="middle" font-weight="600" fill="#065f46">Translate</text>
+  <text x="400" y="258" font-size="9" text-anchor="middle" fill="#64748b">Argos/GLM/混元</text>
+
+  <rect x="480" y="215" width="120" height="55" rx="6" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="540" y="240" font-size="11" text-anchor="middle" font-weight="600" fill="#065f46">AI</text>
+  <text x="540" y="258" font-size="9" text-anchor="middle" fill="#64748b">OpenAI/本地llama</text>
+
+  <rect x="620" y="215" width="120" height="55" rx="6" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="680" y="240" font-size="11" text-anchor="middle" font-weight="600" fill="#065f46">Attach</text>
+  <text x="680" y="258" font-size="9" text-anchor="middle" fill="#64748b">PDF/Word/Excel</text>
+
+  <rect x="740" y="215" width="100" height="55" rx="6" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="790" y="240" font-size="11" text-anchor="middle" font-weight="600" fill="#065f46">Persist</text>
+  <text x="790" y="258" font-size="9" text-anchor="middle" fill="#64748b">历史/知识库</text>
+
+  <!-- 辅助服务 -->
+  <rect x="60" y="285" width="180" height="50" rx="6" fill="#fff" stroke="#10b981" stroke-width="1" stroke-dasharray="4"/>
+  <text x="150" y="310" font-size="11" text-anchor="middle" fill="#475569">Hotkey Service</text>
+  <rect x="260" y="285" width="180" height="50" rx="6" fill="#fff" stroke="#10b981" stroke-width="1" stroke-dasharray="4"/>
+  <text x="350" y="310" font-size="11" text-anchor="middle" fill="#475569">TTS Service</text>
+  <rect x="460" y="285" width="180" height="50" rx="6" fill="#fff" stroke="#10b981" stroke-width="1" stroke-dasharray="4"/>
+  <text x="550" y="310" font-size="11" text-anchor="middle" fill="#475569">OpenAI Compatible</text>
+
+  <!-- Core 层 -->
+  <rect x="40" y="380" width="820" height="120" rx="8" fill="#ede9fe" stroke="#6366f0" stroke-width="1.5"/>
+  <text x="80" y="410" font-size="14" font-weight="600" fill="#4c1d95">Core 层 (组合根)</text>
+
+  <rect x="60" y="425" width="120" height="55" rx="6" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="120" y="450" font-size="11" text-anchor="middle" font-weight="600" fill="#4c1d95">App</text>
+  <text x="120" y="468" font-size="9" text-anchor="middle" fill="#64748b">组合根/生命周期</text>
+
+  <rect x="200" y="425" width="120" height="55" rx="6" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="260" y="450" font-size="11" text-anchor="middle" font-weight="600" fill="#4c1d95">Config</text>
+  <text x="260" y="468" font-size="9" text-anchor="middle" fill="#64748b">配置 dataclass</text>
+
+  <rect x="340" y="425" width="120" height="55" rx="6" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="400" y="450" font-size="11" text-anchor="middle" font-weight="600" fill="#4c1d95">EventBus</text>
+  <text x="400" y="468" font-size="9" text-anchor="middle" fill="#64748b">线程安全发布/订阅</text>
+
+  <rect x="480" y="425" width="120" height="55" rx="6" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="540" y="450" font-size="11" text-anchor="middle" font-weight="600" fill="#4c1d95">Pipeline</text>
+  <text x="540" y="468" font-size="9" text-anchor="middle" fill="#64748b">异步任务编排</text>
+
+  <rect x="620" y="425" width="120" height="55" rx="6" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="680" y="450" font-size="11" text-anchor="middle" font-weight="600" fill="#4c1d95">Registry</text>
+  <text x="680" y="468" font-size="9" text-anchor="middle" fill="#64748b">插件自动发现</text>
+
+  <rect x="740" y="425" width="100" height="55" rx="6" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="790" y="450" font-size="11" text-anchor="middle" font-weight="600" fill="#4c1d95">Types</text>
+  <text x="790" y="468" font-size="9" text-anchor="middle" fill="#64748b">类型定义</text>
+
+  <!-- 依赖方向 -->
+  <text x="460" y="160" font-size="11" fill="#64748b" text-anchor="middle">依赖方向 ↓</text>
+  <text x="460" y="370" font-size="11" fill="#64748b" text-anchor="middle">依赖方向 ↓</text>
+  <text x="870" y="115" font-size="10" fill="#94a3b8">不反向依赖</text>
+  <text x="870" y="270" font-size="10" fill="#94a3b8">不反向依赖</text>
+  <text x="870" y="450" font-size="10" fill="#94a3b8">不反向依赖</text>
+
+  <!-- 底部标注 -->
+  <rect x="40" y="520" width="820" height="50" rx="6" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="70" y="545" font-size="11" fill="#475569">运行环境：Python 3.10-3.14 · ONNX Runtime · edge-tts · RapidOCR · Argos · llama.cpp</text>
+  <text x="70" y="560" font-size="11" fill="#475569">存储：TOML 配置 · SQLite 知识库 · JSON 历史 · ONNX 模型</text>
+</svg>
+</div>
+
+<h3>2.2 分层职责说明</h3>
+<table>
+  <tr>
+    <th>层级</th>
+    <th>职责</th>
+    <th>核心组件</th>
+    <th>依赖约束</th>
+  </tr>
+  <tr>
+    <td>UI 层</td>
+    <td>用户交互、结果展示、事件绑定</td>
+    <td>MainWindow, MaskOverlay, ChatPanel, Tray</td>
+    <td>仅依赖 Services 层</td>
+  </tr>
+  <tr>
+    <td>Services 层</td>
+    <td>六轴业务逻辑、AI/OCR/翻译引擎</td>
+    <td>Capture/OCR/Translate/AI/Attach/Persist</td>
+    <td>仅依赖 Core 层</td>
+  </tr>
+  <tr>
+    <td>Core 层</td>
+    <td>组合根、配置、事件、管线、注册表</td>
+    <td>App, Config, EventBus, Pipeline, Registry</td>
+    <td>不依赖任何其他层</td>
+  </tr>
+</table>
+</div>
+
+<!-- 3. UI 界面设计规范 -->
+<div class="section" id="ui-design">
+<h2>3. UI 界面设计规范</h2>
+<h3>3.1 主窗口布局设计</h3>
+<p>主窗口采用"工具栏 + 主内容区 + 状态栏"三段式布局，遵循"一次只聚焦一个任务流"原则。</p>
+
+<div class="diagram-container">
+  <div class="diagram-title">图 2：主窗口布局设计（建议方案）</div>
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg">
+  <!-- 窗口背景 -->
+  <rect x="20" y="20" width="760" height="460" rx="8" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- 顶部工具栏 -->
+  <rect x="20" y="20" width="760" height="55" rx="8" fill="#f8fafc"/>
+  <rect x="20" y="55" width="760" height="20" fill="#f8fafc"/>
+  <line x1="20" y1="75" x2="780" y2="75" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- 工具栏按钮 -->
+  <rect x="40" y="32" width="70" height="32" rx="6" fill="#6366f0" stroke="none"/>
+  <text x="75" y="52" font-size="11" text-anchor="middle" fill="#fff" font-weight="600">截图</text>
+  <rect x="120" y="32" width="70" height="32" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="155" y="52" font-size="11" text-anchor="middle" fill="#475569">剪贴板</text>
+  <rect x="200" y="32" width="70" height="32" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="235" y="52" font-size="11" text-anchor="middle" fill="#475569">文件</text>
+  <rect x="280" y="32" width="80" height="32" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="320" y="52" font-size="11" text-anchor="middle" fill="#475569">在线图片</text>
+
+  <!-- 右侧设置 -->
+  <circle cx="740" cy="50" r="12" fill="none" stroke="#94a3b8" stroke-width="2"/>
+  <path d="M740,44 L740,56 M734,50 L746,50" stroke="#94a3b8" stroke-width="2" fill="none"/>
+
+  <!-- 主内容区 -->
+  <rect x="40" y="90" width="480" height="320" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="60" y="115" font-size="12" font-weight="600" fill="#1e293b">识别结果</text>
+  <rect x="60" y="130" width="440" height="260" rx="6" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="75" y="155" font-size="11" fill="#64748b">在此处显示 OCR 识别/翻译/AI 结果...</text>
+
+  <!-- 右侧面板 -->
+  <rect x="540" y="90" width="220" height="320" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="560" y="115" font-size="12" font-weight="600" fill="#1e293b">AI 对话</text>
+  <rect x="560" y="130" width="180" height="230" rx="6" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <rect x="560" y="370" width="180" height="30" rx="6" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="650" y="390" font-size="10" text-anchor="middle" fill="#6366f0">发送...</text>
+
+  <!-- 底部标签栏 -->
+  <rect x="20" y="425" width="760" height="55" rx="8" fill="#f8fafc"/>
+  <rect x="20" y="425" width="760" height="30" fill="#f8fafc"/>
+  <line x1="20" y1="425" x2="780" y2="425" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- 标签按钮 -->
+  <rect x="40" y="435" width="100" height="35" rx="6" fill="#6366f0" stroke="none"/>
+  <text x="90" y="457" font-size="11" text-anchor="middle" fill="#fff" font-weight="600">历史记录</text>
+  <rect x="150" y="435" width="100" height="35" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="200" y="457" font-size="11" text-anchor="middle" fill="#475569">知识库</text>
+  <rect x="260" y="435" width="100" height="35" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="310" y="457" font-size="11" text-anchor="middle" fill="#475569">设置</text>
+
+  <!-- 尺寸标注 -->
+  <text x="400" y="495" font-size="10" fill="#94a3b8" text-anchor="middle">建议最小宽度: 900px | 高度: 550px | 可缩放</text>
+</svg>
+</div>
+
+<h3>3.2 蒙版翻译界面设计</h3>
+<p>蒙版是核心交互场景，遵循"无干扰阅读"原则——最小化控件可见性，最大化内容展示。</p>
+
+<div class="diagram-container">
+  <div class="diagram-title">图 3：蒙码翻译界面设计</div>
+<svg viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+  <!-- 屏幕背景 -->
+  <rect x="20" y="20" width="760" height="360" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- 模拟内容 -->
+  <rect x="60" y="60" width="680" height="60" rx="4" fill="#334155"/>
+  <text x="80" y="90" font-size="11" fill="#94a3b8">The quick brown fox jumps over the lazy dog. This is a sample text for testing.</text>
+  <rect x="60" y="140" width="680" height="60" rx="4" fill="#334155"/>
+  <text x="80" y="170" font-size="11" fill="#94a3b8">Artificial intelligence is transforming the way we work and live.</text>
+
+  <!-- 选区高亮 -->
+  <rect x="180" y="75" width="280" height="20" rx="2" fill="#6366f0" opacity="0.3"/>
+  <rect x="180" y="75" width="280" height="20" rx="2" fill="none" stroke="#6366f0" stroke-width="2"/>
+
+  <!-- 翻译结果浮层 -->
+  <rect x="180" y="105" width="320" height="100" rx="8" fill="#fff" stroke="#6366f0" stroke-width="1.5"/>
+  <rect x="180" y="105" width="320" height="28" rx="8" fill="#6366f0"/>
+  <rect x="180" y="120" width="320" height="13" fill="#6366f0"/>
+  <text x="195" y="124" font-size="10" fill="#fff" font-weight="600">翻译结果</text>
+  <circle cx="485" cy="119" r="6" fill="#fff" opacity="0.5"/>
+
+  <text x="195" y="150" font-size="11" fill="#1e293b">敏捷正在改变我们的工作和生活方式。</text>
+  <line x1="195" y1="162" x2="480" y2="162" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="195" y="180" font-size="10" fill="#64748b">引擎: Argos (离线) · 0.3s</text>
+
+  <!-- 底部操作栏 -->
+  <rect x="180" y="215" width="320" height="35" rx="6" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="200" y="237" font-size="10" fill="#475569">🔊 朗读  ·  📋 复制  ·  🔄 重译  ·  ❌ 关闭</text>
+
+  <!-- 说明标注 -->
+  <text x="550" y="130" font-size="10" fill="#94a3b8">悬停显示控制栏</text>
+  <text x="550" y="180" font-size="10" fill="#94a3b8">结果浮层跟随选区</text>
+  <text x="550" y="240" font-size="10" fill="#94a3b8">底部快捷操作</text>
+  <line x1="510" y1="125" x2="545" y2="125" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3"/>
+  <line x1="510" y1="175" x2="545" y2="175" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3"/>
+  <line x1="510" y1="235" x2="545" y2="235" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3"/>
+</svg>
+</div>
+
+<h3>3.3 交互状态设计</h3>
+<table>
+  <tr>
+    <th>状态</th>
+    <th>视觉表现</th>
+    <th>用户操作</th>
+  </tr>
+  <tr>
+    <td>空闲</td>
+    <td>工具栏按钮可点击，内容区显示提示</td>
+    <td>选择捕获源</td>
+  </tr>
+  <tr>
+    <td>捕获中</td>
+    <td>光标变为十字，显示"正在捕获..."</td>
+    <td>等待或取消</td>
+  </tr>
+  <tr>
+    <td>处理中</td>
+    <td>进度条/骨架屏，显示"正在识别..."</td>
+    <td>等待或取消</td>
+  </tr>
+  <tr>
+    <td>完成</td>
+    <td>结果渲染，可交互（复制/朗读/编辑）</td>
+    <td>复制/朗读/编辑/保存</td>
+  </tr>
+  <tr>
+    <td>错误</td>
+    <td>红色提示，显示错误详情</td>
+    <td>重试/关闭</td>
+  </tr>
+</table>
+</div>
+
+<!-- 4. 数据流设计 -->
+<div class="section" id="data-flow">
+<h2>4. 数据流设计</h2>
+<h3>4.1 核心数据流（截图翻译场景）</h3>
+
+<div class="diagram-container">
+  <div class="diagram-title">图 4：截图翻译场景数据流</div>
+<svg viewBox="0 0 900 350" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#6366f0"/>
+    </marker>
+  </defs>
+
+  <!-- 步骤1: 捕获 -->
+  <rect x="40" y="40" width="140" height="70" rx="8" fill="#ede9fe" stroke="#6366f0" stroke-width="1.5"/>
+  <text x="110" y="70" font-size="12" text-anchor="middle" font-weight="600" fill="#4c1d95">1. 捕获</text>
+  <text x="110" y="90" font-size="10" text-anchor="middle" fill="#64748b">截图/剪贴板/文件</text>
+
+  <!-- 步骤2: OCR -->
+  <rect x="240" y="40" width="140" height="70" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="1.5"/>
+  <text x="310" y="70" font-size="12" text-anchor="middle" font-weight="600" fill="#065f46">2. OCR 识别</text>
+  <text x="310" y="90" font-size="10" text-anchor="middle" fill="#64748b">RapidOCR/视觉</text>
+
+  <!-- 步骤3: 翻译 -->
+  <rect x="440" y="40" width="140" height="70" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="510" y="70" font-size="12" text-anchor="middle" font-weight="600" fill="#92400e">3. 翻译</text>
+  <text x="510" y="90" font-size="10" text-anchor="middle" fill="#64748b">Argos/GLM/混元</text>
+
+  <!-- 步骤4: AI -->
+  <rect x="640" y="40" width="140" height="70" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="710" y="70" font-size="12" text-anchor="middle" font-weight="600" fill="#1e40af">4. AI 解读</text>
+  <text x="710" y="90" font-size="10" text-anchor="middle" fill="#64748b">可选/按需调用</text>
+
+  <!-- 箭头 -->
+  <line x1="180" y1="75" x2="235" y2="75" stroke="#6366f0" stroke-width="2" marker-end="url(#arrow2)"/>
+  <line x1="380" y1="75" x2="435" y2="75" stroke="#6366f0" stroke-width="2" marker-end="url(#arrow2)"/>
+  <line x1="580" y1="75" x2="635" y2="75" stroke="#6366f0" stroke-width="2" marker-end="url(#arrow2)"/>
+
+  <!-- 事件总线 -->
+  <rect x="200" y="160" width="520" height="60" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4"/>
+  <text x="460" y="190" font-size="12" text-anchor="middle" font-weight="600" fill="#475569">EventBus (线程安全发布/订阅)</text>
+  <text x="460" y="208" font-size="10" text-anchor="middle" fill="#94a3b8">capture.done → ocr.start → translate.start → ui.update</text>
+
+  <!-- 持久化 -->
+  <rect x="200" y="250" width="200" height="60" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="300" y="275" font-size="11" text-anchor="middle" font-weight="600" fill="#475569">历史记录</text>
+  <text x="300" y="293" font-size="9" text-anchor="middle" fill="#94a3b8">history.json</text>
+
+  <rect x="440" y="250" width="200" height="60" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="540" y="275" font-size="11" text-anchor="middle" font-weight="600" fill="#475569">知识库</text>
+  <text x="540" y="293" font-size="9" text-anchor="middle" fill="#94a3b8">knowledge.db (SQLite FTS5)</text>
+
+  <!-- 连接线 -->
+  <line x1="110" y1="110" x2="460" y2="155" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3"/>
+  <line x1="710" y1="110" x2="540" y2="155" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3"/>
+  <line x1="460" y1="220" x2="300" y2="248" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3"/>
+  <line x1="460" y1="220" x2="540" y2="248" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3"/>
+</svg>
+</div>
+
+<h3>4.2 数据持久化方案</h3>
+<table>
+  <tr>
+    <th>数据类型</th>
+    <th>存储方式</th>
+    <th>路径</th>
+    <th>说明</th>
+  </tr>
+  <tr>
+    <td>用户配置</td>
+    <td>TOML</td>
+    <td><code>config.toml</code></td>
+    <td>人类可读，支持热重载</td>
+  </tr>
+  <tr>
+    <td>操作历史</td>
+    <td>JSON Lines</td>
+    <td><code>history.json</code></td>
+    <td>追加写入，支持流式读取</td>
+  </tr>
+  <tr>
+    <td>知识库</td>
+    <td>SQLite + FTS5</td>
+    <td><code>knowledge.db</code></td>
+    <td>全文检索，BM25 排序</td>
+  </tr>
+  <tr>
+    <td>聊天历史</td>
+    <td>JSON</td>
+    <td><code>chat_history.json</code></td>
+    <td>会话级存储</td>
+  </tr>
+</table>
+</div>
+
+<!-- 5. 技术栈选型 -->
+<div class="section" id="tech-stack">
+<h2>5. 技术栈选型</h2>
+
+<div class="diagram-container">
+  <div class="diagram-title">图 5：技术栈全景图</div>
+<svg viewBox="0 0 900 450" xmlns="http://www.w3.org/2000/svg">
+  <!-- 语言层 -->
+  <rect x="40" y="30" width="820" height="60" rx="8" fill="#ede9fe" stroke="#6366f0" stroke-width="1.5"/>
+  <text x="80" y="55" font-size="12" font-weight="600" fill="#4c1d95">语言层</text>
+  <rect x="160" y="45" width="120" height="35" rx="6" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="220" y="67" font-size="11" text-anchor="middle" fill="#475569">Python 3.10-3.14</text>
+  <rect x="300" y="45" width="120" height="35" rx="6" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="360" y="67" font-size="11" text-anchor="middle" fill="#475569">TOML 配置</text>
+  <rect x="440" y="45" width="120" height="35" rx="6" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="500" y="67" font-size="11" text-anchor="middle" fill="#475569">dataclass</text>
+  <rect x="580" y="45" width="120" height="35" rx="6" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="640" y="67" font-size="11" text-anchor="middle" fill="#475569">asyncio</text>
+  <rect x="720" y="45" width="120" height="35" rx="6" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="780" y="67" font-size="11" text-anchor="middle" fill="#475569">threading</text>
+
+  <!-- GUI 层 -->
+  <rect x="40" y="110" width="820" height="60" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="80" y="135" font-size="12" font-weight="600" fill="#92400e">GUI 层</text>
+  <rect x="160" y="125" width="160" height="35" rx="6" fill="#fff" stroke="#f59e0b" stroke-width="1"/>
+  <text x="240" y="147" font-size="11" text-anchor="middle" fill="#475569">Tkinter (标准库)</text>
+  <rect x="340" y="125" width="160" height="35" rx="6" fill="#fff" stroke="#f59e0b" stroke-width="1"/>
+  <text x="420" y="147" font-size="11" text-anchor="middle" fill="#475569">ttk 主题</text>
+  <rect x="520" y="125" width="160" height="35" rx="6" fill="#fff" stroke="#f59e0b" stroke-width="1"/>
+  <text x="600" y="147" font-size="11" text-anchor="middle" fill="#475569">pystray (托盘)</text>
+
+  <!-- AI/OCR/翻译层 -->
+  <rect x="40" y="190" width="820" height="100" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="1.5"/>
+  <text x="80" y="215" font-size="12" font-weight="600" fill="#065f46">AI / OCR / 翻译</text>
+
+  <rect x="60" y="230" width="160" height="45" rx="6" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="140" y="252" font-size="11" text-anchor="middle" fill="#475569">RapidOCR</text>
+  <text x="140" y="268" font-size="9" text-anchor="middle" fill="#64748b">ONNX Runtime</text>
+
+  <rect x="240" y="230" width="160" height="45" rx="6" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="320" y="252" font-size="11" text-anchor="middle" fill="#475569">Argos</text>
+  <text x="320" y="268" font-size="9" text-anchor="middle" fill="#64748b">CTranslate2</text>
+
+  <rect x="420" y="230" width="160" height="45" rx="6" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="500" y="252" font-size="11" text-anchor="middle" fill="#475569">OpenAI SDK</text>
+  <text x="500" y="268" font-size="9" text-anchor="middle" fill="#64748b">GLM/Hunyuan</text>
+
+  <rect x="600" y="230" width="240" height="45" rx="6" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="720" y="252" font-size="11" text-anchor="middle" fill="#475569">llama-cpp-python</text>
+  <text x="720" y="268" font-size="9" text-anchor="middle" fill="#64748b">本地 GGUF 模型</text>
+
+  <!-- 工具层 -->
+  <rect x="40" y="310" width="820" height="60" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="80" y="335" font-size="12" font-weight="600" fill="#1e40af">工具层</text>
+  <rect x="120" y="325" width="100" height="35" rx="6" fill="#fff" stroke="#3b82f6" stroke-width="1"/>
+  <text x="170" y="347" font-size="11" text-anchor="middle" fill="#475569">keyboard</text>
+  <rect x="240" y="325" width="100" height="35" rx="6" fill="#fff" stroke="#3b82f6" stroke-width="1"/>
+  <text x="290" y="347" font-size="11" text-anchor="middle" fill="#475569">edge-tts</text>
+  <rect x="360" y="325" width="100" height="35" rx="6" fill="#fff" stroke="#3b82f6" stroke-width="1"/>
+  <text x="410" y="347" font-size="11" text-anchor="middle" fill="#475569">uiautomation</text>
+  <rect x="480" y="325" width="100" height="35" rx="6" fill="#fff" stroke="#3b82f6" stroke-width="1"/>
+  <text x="530" y="347" font-size="11" text-anchor="middle" fill="#475569">PyMuPDF</text>
+  <rect x="600" y="325" width="100" height="35" rx="6" fill="#fff" stroke="#3b82f6" stroke-width="1"/>
+  <text x="650" y="347" font-size="11" text-anchor="middle" fill="#475569">openpyxl</text>
+  <rect x="720" y="325" width="100" height="35" rx="6" fill="#fff" stroke="#3b82f6" stroke-width="1"/>
+  <text x="770" y="347" font-size="11" text-anchor="middle" fill="#475569">python-docx</text>
+
+  <!-- 打包层 -->
+  <rect x="40" y="390" width="820" height="45" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="80" y="415" font-size="12" font-weight="600" fill="#475569">打包层</text>
+  <rect x="160" y="400" width="120" height="30" rx="6" fill="#fff" stroke="#94a3b8" stroke-width="1"/>
+  <text x="220" y="420" font-size="11" text-anchor="middle" fill="#475569">PyInstaller</text>
+  <rect x="300" y="400" width="120" height="30" rx="6" fill="#fff" stroke="#94a3b8" stroke-width="1"/>
+  <text x="360" y="420" font-size="11" text-anchor="middle" fill="#475569">GitHub Actions</text>
+  <rect x="440" y="400" width="120" height="30" rx="6" fill="#fff" stroke="#94a3b8" stroke-width="1"/>
+  <text x="500" y="420" font-size="11" text-anchor="middle" fill="#475569">pytest</text>
+  <rect x="580" y="400" width="120" height="30" rx="6" fill="#fff" stroke="#94a3b8" stroke-width="1"/>
+  <text x="640" y="420" font-size="11" text-anchor="middle" fill="#475569">pip</text>
+</svg>
+</div>
+
+<h3>5. 技术选型原则</h3>
+<table>
+  <tr>
+    <th>维度</th>
+    <th>当前选择</th>
+    <th>选型理由</th>
+  </tr>
+  <tr>
+    <td>GUI 框架</td>
+    <td>Tkinter</td>
+    <td>Python 标准库、零额外依赖、绿色分发、跨平台</td>
+  </tr>
+  <tr>
+    <td>OCR 引擎</td>
+    <td>RapidOCR + ONNX</td>
+    <td>中文准确率高、推理快、模型小（tiny 6.9MB）</td>
+  </tr>
+  <tr>
+    <td>翻译引擎</td>
+    <td>Argos (本地) + GLM (云)</td>
+    <td>离线优先保障隐私、云端兜底保障质量</td>
+  </tr>
+  <tr>
+    <td>AI 协议</td>
+    <td>OpenAI 兼容</td>
+    <td>统一接口、支持多提供商、可本地 llama.cpp</td>
+  </tr>
+  <tr>
+    <td>配置格式</td>
+    <td>TOML</td>
+    <td>人类可读、支持注释、类型安全（dataclass 解析）</td>
+  </tr>
+  <tr>
+    <td>打包方案</td>
+    <td>PyInstaller onedir</td>
+    <td>绿色免安装、启动快、依赖全打包</td>
+  </tr>
+</table>
+</div>
+
+<!-- 6. 插件系统设计 -->
+<div class="section" id="plugin">
+<h2>6. 插件系统设计</h2>
+<h3>6.1 插件发现与加载机制</h3>
+
+<div class="diagram-container">
+  <div class="diagram-title">图 6：插件生命周期与发现机制</div>
+<svg viewBox="0 0 800 350" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#6366f0"/>
+    </marker>
+  </defs>
+
+  <!-- 流程 -->
+  <rect x="40" y="40" width="140" height="60" rx="8" fill="#ede9fe" stroke="#6366f0" stroke-width="1.5"/>
+  <text x="110" y="65" font-size="11" text-anchor="middle" font-weight="600" fill="#4c1d95">1. 扫描路径</text>
+  <text x="110" y="83" font-size="9" text-anchor="middle" fill="#64748b">services/*/ & plugins/</text>
+
+  <rect x="220" y="40" width="140" height="60" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="1.5"/>
+  <text x="290" y="65" font-size="11" text-anchor="middle" font-weight="600" fill="#065f46">2. 继承检测</text>
+  <text x="290" y="83" font-size="9" text-anchor="middle" fill="#64748b">ABC 基类匹配</text>
+
+  <rect x="400" y="40" width="140" height="60" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="470" y="65" font-size="11" text-anchor="middle" font-weight="600" fill="#92400e">3. 惰性导入</text>
+  <text x="470" y="83" font-size="9" text-anchor="middle" fill="#64748b">重依赖按需 import</text>
+
+  <rect x="580" y="40" width="140" height="60" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="650" y="65" font-size="11" text-anchor="middle" font-weight="600" fill="#1e40af">4. 注册发现</text>
+  <text x="650" y="83" font-size="9" text-anchor="middle" fill="#64748b">Registry 登记</text>
+
+  <!-- 箭头 -->
+  <line x1="180" y1="70" x2="215" y2="70" stroke="#6366f0" stroke-width="2" marker-end="url(#arrow3)"/>
+  <line x1="360" y1="70" x2="395" y2="70" stroke="#6366f0" stroke-width="2" marker-end="url(#arrow3)"/>
+  <line x1="540" y1="70" x2="575" y2="70" stroke="#6366f0" stroke-width="2" marker-end="url(#arrow3)"/>
+
+  <!-- 插件基类 -->
+  <rect x="200" y="140" width="400" height="80" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="400" y="165" font-size="12" text-anchor="middle" font-weight="600" fill="#475569">插件抽象基类 (ABC)</text>
+  <rect x="220" y="180" width="100" height="30" rx="4" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="270" y="200" font-size="9" text-anchor="middle" fill="#475569">name: str</text>
+  <rect x="340" y="180" width="100" height="30" rx="4" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="390" y="200" font-size="9" text-anchor="middle" fill="#475569">priority: int</text>
+  <rect x="460" y="180" width="120" height="30" rx="4" fill="#fff" stroke="#6366f0" stroke-width="1"/>
+  <text x="520" y="200" font-size="9" text-anchor="middle" fill="#475569">execute() -> Result</text>
+
+  <!-- 示例插件 -->
+  <rect x="100" y="250" width="180" height="70" rx="8" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="190" y="275" font-size="11" text-anchor="middle" font-weight="600" fill="#065f46">RapidOcrEngine</text>
+  <text x="190" y="293" font-size="9" text-anchor="middle" fill="#64748b">继承 OcrEngineBase</text>
+  <text x="190" y="310" font-size="9" text-anchor="middle" fill="#64748b">PP-OCRv6 ONNX</text>
+
+  <rect x="310" y="250" width="180" height="70" rx="8" fill="#fff" stroke="#f59e0b" stroke-width="1"/>
+  <text x="400" y="275" font-size="11" text-anchor="middle" font-weight="600" fill="#92400e">ArgosTranslate</text>
+  <text x="400" y="293" font-size="9" text-anchor="middle" fill="#64748b">继承 TranslateBase</text>
+  <text x="400" y="310" font-size="9" text-anchor="middle" fill="#64748b">CTranslate2 + SentencePiece</text>
+
+  <rect x="520" y="250" width="180" height="70" rx="8" fill="#fff" stroke="#3b82f6" stroke-width="1"/>
+  <text x="610" y="275" font-size="11" text-anchor="middle" font-weight="600" fill="#1e40af">OpenAIProvider</text>
+  <text x="610" y="293" font-size="9" text-anchor="middle" fill="#64748b">继承 AIProviderBase</text>
+  <text x="610" y="310" font-size="9" text-anchor="middle" fill="#64748b">OpenAI 兼容 API</text>
+
+  <!-- 连接线 -->
+  <line x1="400" y1="220" x2="190" y2="248" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3"/>
+  <line x1="400" y1="220" x2="400" y2="248" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3"/>
+  <line x1="400" y1="220" x2="610" y2="248" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3"/>
+</svg>
+</div>
+
+<h3>6.2 插件开发规范</h3>
+<table>
+  <tr>
+    <th>规范项</th>
+    <th>要求</th>
+    <th>说明</th>
+  </tr>
+  <tr>
+    <td>命名</td>
+    <td><code>{功能}{轴名}Base</code></td>
+    <td>如 <code>OcrEngineBase</code></td>
+  </tr>
+  <tr>
+    <td>发现</td>
+    <td>继承基类 + 放入 services/*/</td>
+    <td>Registry 自动扫描</td>
+  </tr>
+  <tr>
+    <td>依赖</td>
+    <td>重依赖在方法内导入</td>
+    <td>避免强制安装</td>
+  </tr>
+  <tr>
+    <td>配置</td>
+    <td>通过 config dataclass 注入</td>
+    <td>不硬编码配置路径</td>
+  </tr>
+</table>
+</div>
+
+<!-- 7. 开发路线图 -->
+<div class="section" id="roadmap">
+<h2>7. 开发路线图</h2>
+<h3>7.1 版本迭代甘特图</h3>
+
+<div class="diagram-container">
+  <div class="diagram-title">图 7：WinOCR 3.4 开发路线图（甘特图）</div>
+<svg viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg">
+  <!-- 时间轴标题 -->
+  <text x="160" y="30" font-size="11" text-anchor="middle" font-weight="600" fill="#475569">2026 Q3</text>
+  <text x="310" y="30" font-size="11" text-anchor="middle" font-weight="600" fill="#475569">2026 Q4</text>
+  <text x="460" y="30" font-size="11" text-anchor="middle" font-weight="600" fill="#475569">2027 Q1</text>
+  <text x="610" y="30" font-size="11" text-anchor="middle" font-weight="600" fill="#475569">2027 Q2</text>
+  <text x="760" y="30" font-size="11" text-anchor="middle" font-weight="600" fill="#475569">2027 Q3</text>
+
+  <!-- 月份刻度 -->
+  <line x1="40" y1="45" x2="880" y2="45" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="80" y="60" font-size="9" fill="#94a3b8">7月</text>
+  <text x="160" y="60" font-size="9" fill="#94a3b8">8月</text>
+  <text x="240" y="60" font-size="9" fill="#94a3b8">9月</text>
+  <text x="320" y="60" font-size="9" fill="#94a3b8">10月</text>
+  <text x="400" y="60" font-size="9" fill="#94a3b8">11月</text>
+  <text x="480" y="60" font-size="9" fill="#94a3b8">12月</text>
+  <text x="560" y="60" font-size="9" fill="#94a3b8">1月</text>
+  <text x="640" y="60" font-size="9" fill="#94a3b8">2月</text>
+  <text x="720" y="60" font-size="9" fill="#94a3b8">3月</text>
+  <text x="800" y="60" font-size="9" fill="#94a3b8">4月</text>
+  <text x="860" y="60" font-size="9" fill="#94a3b8">5月</text>
+
+  <!-- 网格线 -->
+  <line x1="80" y1="45" x2="80" y2="370" stroke="#f1f5f9" stroke-width="1"/>
+  <line x1="160" y1="45" x2="160" y2="370" stroke="#f1f5f9" stroke-width="1"/>
+  <line x1="240" y1="45" x2="240" y2="370" stroke="#f1f5f9" stroke-width="1"/>
+  <line x1="320" y1="45" x2="320" y2="370" stroke="#f1f5f9" stroke-width="1"/>
+  <line x1="400" y1="45" x2="400" y2="370" stroke="#f1f5f9" stroke-width="1"/>
+  <line x1="480" y1="45" x2="480" y2="370" stroke="#f1f5f9" stroke-width="1"/>
+  <line x1="560" y1="45" x2="560" y2="370" stroke="#f1f5f9" stroke-width="1"/>
+  <line x1="640" y1="45" x2="640" y2="370" stroke="#f1f5f9" stroke-width="1"/>
+  <line x1="720" y1="45" x2="720" y2="370" stroke="#f1f5f9" stroke-width="1"/>
+  <line x1="800" y1="45" x2="800" y2="370" stroke="#f1f5f9" stroke-width="1"/>
+
+  <!-- P0: 架构优化 -->
+  <text x="30" y="90" font-size="10" fill="#475569">P0 架构</text>
+  <rect x="100" y="78" width="140" height="22" rx="4" fill="#6366f0"/>
+  <text x="170" y="94" font-size="9" text-anchor="middle" fill="#fff">UI 层子包拆分</text>
+  <rect x="260" y="78" width="120" height="22" rx="4" fill="#6366f0"/>
+  <text x="320" y="94" font-size="9" text-anchor="middle" fill="#fff">应用层引入</text>
+  <rect x="400" y="78" width="100" height="22" rx="4" fill="#a5b4fc"/>
+  <text x="450" y="94" font-size="9" text-anchor="middle" fill="#4c1d95">配置迁移</text>
+
+  <!-- P0: 安全加固 -->
+  <text x="30" y="125" font-size="10" fill="#475569">P0 安全</text>
+  <rect x="100" y="113" width="100" height="22" rx="4" fill="#ef4444"/>
+  <text x="150" y="129" font-size="9" text-anchor="middle" fill="#fff">API Key 加密</text>
+  <rect x="220" y="113" width="140" height="22" rx="4" fill="#fca5a5"/>
+  <text x="290" y="129" font-size="9" text-anchor="middle" fill="#991b1b">日志脱敏</text>
+
+  <!-- P1: 体验优化 -->
+  <text x="30" y="160" font-size="10" fill="#475569">P1 体验</text>
+  <rect x="100" y="148" width="120" height="22" rx="4" fill="#10b981"/>
+  <text x="160" y="164" font-size="9" text-anchor="middle" fill="#fff">托盘优先</text>
+  <rect x="240" y="148" width="140" height="22" rx="4" fill="#10b981"/>
+  <text x="310" y="164" font-size="9" text-anchor="middle" fill="#fff">主窗口重构</text>
+  <rect x="400" y="148" width="120" height="22" rx="4" fill="#34d399"/>
+  <text x="460" y="164" font-size="9" text-anchor="middle" fill="#065f46">设置分组</text>
+  <rect x="540" y="148" width="100" height="22" rx="4" fill="#34d399"/>
+  <text x="590" y="164" font-size="9" text-anchor="middle" fill="#065f46">蒙版优化</text>
+
+  <!-- P1: 功能增强 -->
+  <text x="30" y="195" font-size="10" fill="#475569">P1 功能</text>
+  <rect x="100" y="183" width="140" height="22" rx="4" fill="#f59e0b"/>
+  <text x="170" y="199" font-size="9" text-anchor="middle" fill="#fff">翻译对比</text>
+  <rect x="260" y="183" width="120" height="22" rx="4" fill="#f59e0b"/>
+  <text x="320" y="199" font-size="9" text-anchor="middle" fill="#fff">BM25 排序</text>
+  <rect x="400" y="183" width="140" height="22" rx="4" fill="#fbbf24"/>
+  <text x="470" y="199" font-size="9" text-anchor="middle" fill="#92400e">术语表</text>
+
+  <!-- P2: 生态建设 -->
+  <text x="30" y="230" font-size="10" fill="#475569">P2 生态</text>
+  <rect x="100" y="218" width="120" height="22" rx="4" fill="#3b82f6"/>
+  <text x="160" y="234" font-size="9" text-anchor="middle" fill="#fff">插件 CLI</text>
+  <rect x="240" y="218" width="140" height="22" rx="4" fill="#3b82f6"/>
+  <text x="310" y="234" font-size="9" text-anchor="middle" fill="#fff">热加载</text>
+  <rect x="400" y="218" width="160" height="22" rx="4" fill="#60a5fa"/>
+  <text x="480" y="234" font-size="9" text-anchor="middle" fill="#1e40af">插件市场</text>
+
+  <!-- P2: 国际化 -->
+  <text x="30" y="265" font-size="10" fill="#475569">P2 i18n</text>
+  <rect x="100" y="253" width="140" height="22" rx="4" fill="#8b5cf6"/>
+  <text x="170" y="269" font-size="9" text-anchor="middle" fill="#fff">gettext 框架</text>
+  <rect x="260" y="253" width="120" height="22" rx="4" fill="#a78bfa"/>
+  <text x="320" y="269" font-size="9" text-anchor="middle" fill="#4c1d95">中/英/日</text>
+
+  <!-- P3: 长期 -->
+  <text x="30" y="300" font-size="10" fill="#475569">P3 长期</text>
+  <rect x="100" y="288" width="160" height="22" rx="4" fill="#94a3b8"/>
+  <text x="180" y="304" font-size="9" text-anchor="middle" fill="#fff">GUI 框架评估</text>
+  <rect x="280" y="288" width="140" height="22" rx="4" fill="#94a3b8"/>
+  <text x="350" y="304" font-size="9" text-anchor="middle" fill="#fff">MSIX 打包</text>
+  <rect x="440" y="288" width="140" height="22" rx="4" fill="#cbd5e1"/>
+  <text x="510" y="304" font-size="9" text-anchor="middle" fill="#475569">自动更新</text>
+
+  <!-- 图例 -->
+  <rect x="600" y="260" width="260" height="120" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="620" y="280" font-size="10" font-weight="600" fill="#475569">图例</text>
+  <rect x="620" y="290" width="16" height="12" rx="2" fill="#6366f0"/>
+  <text x="645" y="300" font-size="9" fill="#64748b">P0 架构优化</text>
+  <rect x="620" y="310" width="16" height="12" rx="2" fill="#ef4444"/>
+  <text x="645" y="320" font-size="9" fill="#64748b">P0 安全加固</text>
+  <rect x="620" y="330" width="16" height="12" rx="2" fill="#10b981"/>
+  <text x="645" y="340" font-size="9" fill="#64748b">P1 体验优化</text>
+  <rect x="620" y="350" width="16" height="12" rx="2" fill="#f59e0b"/>
+  <text x="645" y="360" font-size="9" fill="#64748b">P1 功能增强</text>
+  <rect x="740" y="290" width="16" height="12" rx="2" fill="#3b82f6"/>
+  <text x="765" y="300" font-size="9" fill="#64748b">P2 生态建设</text>
+  <rect x="740" y="310" width="16" height="12" rx="2" fill="#8b5cf6"/>
+  <text x="765" y="320" font-size="9" fill="#64748b">P2 国际化</text>
+  <rect x="740" y="330" width="16" height="12" rx="2" fill="#94a3b8"/>
+  <text x="765" y="340" font-size="9" fill="#64748b">P3 长期规划</text>
+</svg>
+</div>
+
+<h3>7.2 里程碑说明</h3>
+<table>
+  <tr>
+    <th>阶段</th>
+    <th>时间</th>
+    <th>目标</th>
+    <th>交付物</th>
+  </tr>
+  <tr>
+    <td>v3.5</td>
+    <td>2026 Q4</td>
+    <td>安全加固 + 体验优化</td>
+    <td>API Key 加密、托盘优先、主窗口重构</td>
+  </tr>
+  <tr>
+    <td>v3.6</td>
+    <td>2027 Q1</td>
+    <td>功能增强 + 生态建设</td>
+    <td>翻译对比、插件 CLI、知识库 BM25</td>
+  </tr>
+  <tr>
+    <td>v4.0</td>
+    <td>2027 Q2-Q3</td>
+    <td>架构升级（可选）</td>
+    <td>GUI 框架评估、MSIX 打包、自动更新</td>
+  </tr>
+</table>
+</div>
+
+<!-- 8. 安全与隐私设计 -->
+<div class="section" id="security">
+<h2>8. 安全与隐私设计</h2>
+
+<div class="diagram-container">
+  <div class="diagram-title">图 8：安全与隐私设计</div>
+<svg viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg">
+  <!-- 安全层级 -->
+  <rect x="40" y="40" width="720" height="60" rx="8" fill="#fee2e2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="80" y="65" font-size="12" font-weight="600" fill="#991b1b">存储安全</text>
+  <rect x="100" y="75" width="180" height="20" rx="4" fill="#fff" stroke="#ef4444" stroke-width="1"/>
+  <text x="190" y="89" font-size="9" text-anchor="middle" fill="#64748b">API Key → Windows DPAPI 加密</text>
+  <rect x="300" y="75" width="180" height="20" rx="4" fill="#fff" stroke="#ef4444" stroke-width="1"/>
+  <text x="390" y="89" font-size="9" text-anchor="middle" fill="#64748b">配置文件权限控制</text>
+  <rect x="500" y="75" width="240" height="20" rx="4" fill="#fff" stroke="#ef4444" stroke-width="1"/>
+  <text x="620" y="89" font-size="9" text-anchor="middle" fill="#64748b">日志脱敏（自动隐藏敏感信息）</text>
+
+  <!-- 传输安全 -->
+  <rect x="40" y="120" width="720" height="60" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="80" y="145" font-size="12" font-weight="600" fill="#92400e">传输安全</text>
+  <rect x="100" y="155" width="180" height="20" rx="4" fill="#fff" stroke="#f59e0b" stroke-width="1"/>
+  <text x="190" y="169" font-size="9" text-anchor="middle" fill="#64748b">HTTPS 强制（TLS 1.2+）</text>
+  <rect x="300" y="155" width="180" height="20" rx="4" fill="#fff" stroke="#f59e0b" stroke-width="1"/>
+  <text x="390" y="169" font-size="9" text-anchor="middle" fill="#64748b">证书固定（可选）</text>
+  <rect x="500" y="155" width="240" height="20" rx="4" fill="#fff" stroke="#f59e0b" stroke-width="1"/>
+  <text x="620" y="169" font-size="9" text-anchor="middle" fill="#64748b">请求签名（防重放）</text>
+
+  <!-- 隐私保护 -->
+  <rect x="40" y="200" width="720" height="60" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="1.5"/>
+  <text x="80" y="225" font-size="12" font-weight="600" fill="#065f46">隐私保护</text>
+  <rect x="100" y="235" width="200" height="20" rx="4" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="200" y="249" font-size="9" text-anchor="middle" fill="#64748b">本地优先（OCR/翻译离线可用）</text>
+  <rect x="320" y="235" width="200" height="20" rx="4" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="420" y="249" font-size="9" text-anchor="middle" fill="#64748b">数据最小化（仅发送必要内容）</text>
+  <rect x="540" y="235" width="220" height="20" rx="4" fill="#fff" stroke="#10b981" stroke-width="1"/>
+  <text x="650" y="249" font-size="9" text-anchor="middle" fill="#64748b">用户控制（可清除历史/知识库）</text>
+</svg>
+</div>
+
+<h3>8. 安全最佳实践</h3>
+<table>
+  <tr>
+    <th>项目</th>
+    <th>当前状态</th>
+    <th>建议</th>
+    <th>优先级</th>
+  </tr>
+  <tr>
+    <td>API Key 存储</td>
+    <td>明文存储</td>
+    <td>使用 Windows DPAPI (<code>cryptography.fernet</code> 或 <code>win32crypt</code>)</td>
+    <td><span class="tag tag-brand">P0</span></td>
+  </tr>
+  <tr>
+    <td>日志脱敏</td>
+    <td>无</td>
+    <td>自动隐藏 API Key、Token 等敏感信息</td>
+    <td><span class="tag tag-brand">P0</span></td>
+  </tr>
+  <tr>
+    <td>传输加密</td>
+    <td>HTTPS</td>
+    <td>强制 TLS 1.2+，可选证书固定</td>
+    <td><span class="tag tag-info">P1</span></td>
+  </tr>
+  <tr>
+    <td>输入校验</td>
+    <td>基础</td>
+    <td>配置值范围校验、路径遍历防护</td>
+    <td><span class="tag tag-info">P1</span></td>
+  </tr>
+</table>
+</div>
+
+<!-- 页脚 -->
+<div class="footer">
+  <p>WinOCR 3.4 技术文档 · 版本 1.0 · 2026-09-04</p>
+  <p>本文档描述 WinOCR 3.4 的系统架构设计、UI 界面规范、技术选型与开发路线图</p>
+</div>
+
+</body>
+</html>

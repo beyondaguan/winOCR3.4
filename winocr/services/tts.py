@@ -19,6 +19,7 @@
   同一时刻只允许一个朗读任务，新任务会先停掉旧的（用户连点两次
   应该是「换成读这段」，而不是两个声音叠在一起）。
 """
+
 from __future__ import annotations
 
 import atexit
@@ -53,10 +54,10 @@ PRESET_VOICES: List[tuple] = [
 def _clean(text: str) -> str:
     """去掉 Markdown 记号与多余空白 —— 不然会把「星号星号」读出来。"""
     t = text or ""
-    t = re.sub(r"```.*?```", " ", t, flags=re.S)      # 代码块整段跳过
+    t = re.sub(r"```.*?```", " ", t, flags=re.S)  # 代码块整段跳过
     t = re.sub(r"`([^`]*)`", r"\1", t)
     t = re.sub(r"[*_#>|]+", " ", t)
-    t = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t)    # 链接只读标题
+    t = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t)  # 链接只读标题
     t = re.sub(r"\s+", " ", t).strip()
     return t[:MAX_CHARS]
 
@@ -70,6 +71,7 @@ class _MciPlayer:
 
     def _send(self, cmd: str) -> int:
         import ctypes
+
         return ctypes.windll.winmm.mciSendStringW(cmd, None, 0, None)
 
     def play(self, path: str, wait_flag: threading.Event) -> bool:
@@ -90,7 +92,8 @@ class _MciPlayer:
             buf = ctypes.create_unicode_buffer(64)
             while not wait_flag.is_set():
                 ctypes.windll.winmm.mciSendStringW(
-                    f"status {alias} mode", buf, 64, None)
+                    f"status {alias} mode", buf, 64, None
+                )
                 if buf.value.strip() != "playing":
                     break
                 time.sleep(0.05)
@@ -143,11 +146,22 @@ class _SapiHost:
     # ------------------------------------------------------------------
     @staticmethod
     def _build_script() -> str:
-        """生成常驻宿主的 PowerShell 脚本（Windows 专用）。"""
+        """生成常驻宿主的 PowerShell 脚本（Windows 专用）。
+
+        订阅 SpeakProgress 事件，逐词输出 PROG:offset:length 行，
+        Python 端 reader 线程解析后回调 on_progress 实现蒙版跟进。
+        """
         return (
             "[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
             "Add-Type -AssemblyName System.Speech; "
             "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+            "$s.add_SpeakProgress({ "
+            "  param($sender, $e); "
+            "  [Console]::Out.Write("
+            "    'PROG:' + $e.CharacterPosition + ':' + "
+            "    $e.CharacterCount + [char]10); "
+            "  [Console]::Out.Flush() "
+            "}); "
             "while ($true) { "
             "  $line = [Console]::In.ReadLine(); "
             "  if ($line -eq $null -or $line -eq 'QUIT') { break }; "
@@ -159,21 +173,32 @@ class _SapiHost:
             "  $txt = [Text.Encoding]::UTF8.GetString("
             "    [Convert]::FromBase64String($p[3])); "
             "  try { $s.Speak($txt) } catch { }; "
-            "  [Console]::Out.Write(\"DONE:$tok`n\"); "
+            '  [Console]::Out.Write("DONE:$tok`n"); '
             "  [Console]::Out.Flush() "
             "}"
         )
 
     def _launch(self) -> subprocess.Popen:
         """启动常驻宿主进程（可被单测 monkeypatch）。"""
-        flags = 0x08000000 if os.name == "nt" else 0   # CREATE_NO_WINDOW
+        flags = 0x08000000 if os.name == "nt" else 0  # CREATE_NO_WINDOW
         return subprocess.Popen(
-            ["powershell", "-NoProfile", "-NonInteractive",
-             "-ExecutionPolicy", "Bypass", "-Command", self._build_script()],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            [
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                self._build_script(),
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             creationflags=flags,
-            text=True, encoding="utf-8", bufsize=1)
+            text=True,
+            encoding="utf-8",
+            bufsize=1,
+        )
 
     def _ensure(self) -> bool:
         """确保宿主存活（惰性启动 / 死亡重建）。返回是否可用。"""
@@ -207,11 +232,18 @@ class _SapiHost:
                 pass
 
     # ------------------------------------------------------------------
-    def speak(self, text: str, cancel: threading.Event,
-              rate: int = 0, vol: int = 0) -> bool:
+    def speak(
+        self,
+        text: str,
+        cancel: threading.Event,
+        rate: int = 0,
+        vol: int = 0,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> bool:
         """复用常驻进程朗读一段文本。
 
-        返回：True=已朗读或已被取消（处理完毕）；False=失败（调用方回落）。
+        on_progress(offset, length) 在 SpeakProgress 事件触发时回调，
+        用于 UI 蒙版跟进。返回：True=处理完毕；False=失败（调用方回落）。
         """
         token = uuid.uuid4().hex
         payload = base64.b64encode(text.encode("utf-8")).decode("ascii")
@@ -229,6 +261,15 @@ class _SapiHost:
                 try:
                     for raw in proc.stdout:
                         raw = (raw or "").strip()
+                        if raw.startswith("PROG:"):
+                            if on_progress and not cancel.is_set():
+                                parts = raw[5:].split(":")
+                                if len(parts) >= 2:
+                                    try:
+                                        on_progress(int(parts[0]), int(parts[1]))
+                                    except Exception:
+                                        pass
+                            continue
                         if raw.startswith("DONE:"):
                             if raw[5:] == token:
                                 ack.set()
@@ -250,7 +291,7 @@ class _SapiHost:
             waited = 0.0
             while not ack.is_set() and not dead.is_set():
                 if cancel.is_set():
-                    self._terminate()          # 取消：杀宿主，音频即停
+                    self._terminate()  # 取消：杀宿主，音频即停
                     return True
                 time.sleep(step)
                 waited += step
@@ -273,8 +314,8 @@ class TtsService:
         self._player = _MciPlayer()
         self._cancel = threading.Event()
         self._thread: Optional[threading.Thread] = None
-        self._edge_ok: Optional[bool] = None      # None=未探测 / True / False
-        self.last_engine = ""                     # 上次真正出声的引擎
+        self._edge_ok: Optional[bool] = None  # None=未探测 / True / False
+        self.last_engine = ""  # 上次真正出声的引擎
         # P2-11：常驻 SAPI 宿主（PowerShell+System.Speech），懒启动、跨朗读复用
         self._sapi_host: Optional[_SapiHost] = None
         self._sapi_lock = threading.Lock()
@@ -288,6 +329,7 @@ class TtsService:
     def _has_edge(self) -> bool:
         try:
             import edge_tts  # noqa: F401
+
             return True
         except Exception:
             return False
@@ -297,7 +339,8 @@ class TtsService:
             return "系统语音（离线）"
         mode = getattr(self.cfg, "engine", "auto") if self.cfg else "auto"
         return {"edge": "Edge 在线语音", "sapi": "系统语音（离线）"}.get(
-            mode, "自动（在线优先）")
+            mode, "自动（在线优先）"
+        )
 
     def list_voices(self) -> List[tuple]:
         return list(PRESET_VOICES)
@@ -305,19 +348,19 @@ class TtsService:
     # ------------------------------------------------------------------
     def warmup(self) -> None:
         """探测 edge 可用性，并在后台真合成一次「你好。」预热链路。
-
-        A 改进：旧实现只 import 不合成，导致第一次朗读还要现场做
-        DNS 解析 + TLS 握手 + WebSocket 建连（首调用 ~19s）。
-        这里在守护线程里合成一段极短文本，把上述链路预热好——
-        用户第一次点「朗读」时首声延迟从 ~19s 降到 ~3s。
-        不阻塞启动；离线/被墙时静默失败，不影响后续降级到 sapi。
+        同时预热 SAPI 常驻宿主，确保首次朗读无需冷启动。
         """
         self._edge_ok = self._has_edge()
         if self._edge_ok and not getattr(self, "_warmed", False):
             self._warmed = True
             threading.Thread(
-                target=self._warmup_synth, daemon=True,
-                name="winocr-tts-warmup").start()
+                target=self._warmup_synth, daemon=True, name="winocr-tts-warmup"
+            ).start()
+        # 预热 SAPI 常驻宿主，免首次朗读冷启动
+        try:
+            self._get_sapi_host()
+        except Exception:
+            pass
 
     def _warmup_synth(self) -> None:
         try:
@@ -327,10 +370,9 @@ class TtsService:
             pass
 
     def stop(self) -> None:
-        """立刻停：先置取消位，再掐播放器，并回收常驻宿主。"""
+        """立刻停：先置取消位，再掐播放器。常驻宿主保留复用，atexit 负责退出清理。"""
         self._cancel.set()
         self._player.stop()
-        self._stop_host()
 
     def _stop_host(self) -> None:
         """终止常驻 SAPI 宿主（stop / atexit 调用）。"""
@@ -348,27 +390,38 @@ class TtsService:
         return bool(t and t.is_alive())
 
     # ------------------------------------------------------------------
-    def speak(self, text: str, on_status: Optional[Callable[[str], None]] = None) -> None:
-        """异步朗读。on_status 会被后台线程回调（调用方负责切回 UI 线程）。"""
+    def speak(
+        self,
+        text: str,
+        on_status: Optional[Callable[[str], None]] = None,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> None:
+        """异步朗读。on_status 回调状态文本，on_progress(offset, length)
+        回调当前朗读位置用于 UI 蒙版跟进。两者均在后台线程触发。"""
         text = _clean(text)
         if not text:
             if on_status:
                 on_status("没有可朗读的文本")
             return
 
-        self.stop()                     # 新任务顶掉旧任务
+        self.stop()  # 新任务顶掉旧任务
         t = self._thread
         if t and t.is_alive():
-            t.join(timeout=1.5)
+            t.join(timeout=0.2)  # 只等旧线程快速退出，不阻塞新朗读启动
         self._cancel = threading.Event()
 
         self._thread = threading.Thread(
-            target=self._work, args=(text, on_status, self._cancel),
-            daemon=True, name="winocr-tts")
+            target=self._work,
+            args=(text, on_status, self._cancel, on_progress),
+            daemon=True,
+            name="winocr-tts",
+        )
         self._thread.start()
 
     # ------------------------------------------------------------------
-    def _work(self, text: str, on_status, cancel: threading.Event) -> None:
+    def _work(
+        self, text: str, on_status, cancel: threading.Event, on_progress=None
+    ) -> None:
         mode = (getattr(self.cfg, "engine", "auto") if self.cfg else "auto") or "auto"
 
         def say(msg: str) -> None:
@@ -378,10 +431,17 @@ class TtsService:
                 except Exception:
                     pass
 
+        def prog(off: int, ln: int) -> None:
+            if on_progress and not cancel.is_set():
+                try:
+                    on_progress(off, ln)
+                except Exception:
+                    pass
+
         if mode in ("auto", "edge") and self._has_edge():
             say("正在合成语音…")
             try:
-                if self._speak_edge(text, cancel):
+                if self._speak_edge(text, cancel, on_progress=prog):
                     self.last_engine = "edge"
                     say("" if cancel.is_set() else "朗读完成")
                     return
@@ -397,7 +457,7 @@ class TtsService:
         if cancel.is_set():
             return
         try:
-            if self._speak_sapi(text, cancel):
+            if self._speak_sapi(text, cancel, on_progress=prog):
                 self.last_engine = "sapi"
                 say("" if cancel.is_set() else "朗读完成（系统语音）")
                 return
@@ -406,7 +466,12 @@ class TtsService:
         say("朗读失败：系统语音不可用")
 
     # ---------------- edge：在线 Neural ----------------
-    def _speak_edge(self, text: str, cancel: threading.Event) -> bool:
+    def _speak_edge(
+        self,
+        text: str,
+        cancel: threading.Event,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> bool:
         """在线 Neural 朗读。
 
         B 改进（流式 + 提前播放）：旧实现把整段文本合成成一个 mp3
@@ -414,15 +479,28 @@ class TtsService:
         起一个后台合成线程逐句产出 mp3 推入队列，主播放线程边播边等
         下一句，于是**第一句合成完就开始响**，后续句子在后台补齐。
         短文本（单句）走单段老路径，行为不变。
+
+        on_progress 在每个 chunk 开始播放前回调，传递该 chunk 在原文中
+        的字符偏移和长度，用于 UI 蒙版跟进。
         """
         chunks = self._split_sentences(text)
         if len(chunks) <= 1:
-            return self._speak_edge_single(text, cancel)
+            return self._speak_edge_single(text, cancel, on_progress=on_progress)
 
-        q: "queue.Queue[str]" = queue.Queue()
+        # 计算每个 chunk 在原文中的字符偏移
+        offsets: List[int] = []
+        pos = 0
+        for ch in chunks:
+            idx = text.find(ch, pos)
+            if idx < 0:
+                idx = pos
+            offsets.append(idx)
+            pos = idx + len(ch)
+
+        q: "queue.Queue[Optional[tuple]]" = queue.Queue(maxsize=2)
 
         def produce() -> None:
-            for ch in chunks:
+            for i, ch in enumerate(chunks):
                 if cancel.is_set():
                     q.put(None)
                     return
@@ -430,17 +508,16 @@ class TtsService:
                     path = self._synth_chunk(ch, cancel)
                 except Exception:
                     if not cancel.is_set():
-                        q.put(None)        # 合成失败：停后续，已播部分保留
+                        q.put(None)  # 合成失败：停后续，已播部分保留
                     return
                 if cancel.is_set():
                     self._rm(path)
                     q.put(None)
                     return
-                q.put(path)
+                q.put((path, offsets[i], len(ch)))
             q.put(None)
 
-        prod = threading.Thread(
-            target=produce, daemon=True, name="winocr-tts-synth")
+        prod = threading.Thread(target=produce, daemon=True, name="winocr-tts-synth")
         prod.start()
 
         played_any = False
@@ -449,40 +526,54 @@ class TtsService:
             if item is None:
                 break
             if cancel.is_set():
-                self._rm(item)
+                if isinstance(item, tuple):
+                    self._rm(item[0])
                 break
-            played_any = self._player.play(item, cancel) or played_any
-            self._rm(item)
+            path, off, ln = item
+            if on_progress and not cancel.is_set():
+                try:
+                    on_progress(off, ln)
+                except Exception:
+                    pass
+            played_any = self._player.play(path, cancel) or played_any
+            self._rm(path)
             if cancel.is_set():
                 break
         prod.join(timeout=2)
-        while not q.empty():              # 清掉残留未播文件
+        while not q.empty():  # 清掉残留未播文件
             try:
                 leftover = q.get_nowait()
-                if isinstance(leftover, str):
-                    self._rm(leftover)
+                if isinstance(leftover, tuple):
+                    self._rm(leftover[0])
             except Exception:
                 pass
         return played_any or cancel.is_set()
 
-    def _speak_edge_single(self, text: str, cancel: threading.Event) -> bool:
+    def _speak_edge_single(
+        self,
+        text: str,
+        cancel: threading.Event,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> bool:
         """单段（短文本）合成+播放，等价于旧实现。"""
         import asyncio
 
         import edge_tts
 
-        voice = (getattr(self.cfg, "voice", "") if self.cfg else "") \
-            or "zh-CN-XiaoxiaoNeural"
+        voice = (
+            getattr(self.cfg, "voice", "") if self.cfg else ""
+        ) or "zh-CN-XiaoxiaoNeural"
         rate = int(getattr(self.cfg, "rate", 0) or 0) if self.cfg else 0
         vol = int(getattr(self.cfg, "volume", 0) or 0) if self.cfg else 0
 
-        path = os.path.join(tempfile.gettempdir(),
-                            f"winocr_tts_{uuid.uuid4().hex[:8]}.mp3")
+        path = os.path.join(
+            tempfile.gettempdir(), f"winocr_tts_{uuid.uuid4().hex[:8]}.mp3"
+        )
 
         async def _synth() -> None:
             comm = edge_tts.Communicate(
-                text, voice,
-                rate=f"{rate:+d}%", volume=f"{vol:+d}%")
+                text, voice, rate=f"{rate:+d}%", volume=f"{vol:+d}%"
+            )
             await comm.save(path)
 
         try:
@@ -493,10 +584,15 @@ class TtsService:
 
         if cancel.is_set():
             self._rm(path)
-            return True                 # 已被用户取消，算「处理完了」
+            return True  # 已被用户取消，算「处理完了」
         if not os.path.exists(path) or os.path.getsize(path) < 256:
             self._rm(path)
             return False
+        if on_progress and not cancel.is_set():
+            try:
+                on_progress(0, len(text))
+            except Exception:
+                pass
         try:
             return self._player.play(path, cancel) or cancel.is_set()
         finally:
@@ -508,18 +604,22 @@ class TtsService:
 
         import edge_tts
 
-        voice = (getattr(self.cfg, "voice", "") if self.cfg else "") \
-            or "zh-CN-XiaoxiaoNeural"
+        voice = (
+            getattr(self.cfg, "voice", "") if self.cfg else ""
+        ) or "zh-CN-XiaoxiaoNeural"
         rate = int(getattr(self.cfg, "rate", 0) or 0) if self.cfg else 0
         vol = int(getattr(self.cfg, "volume", 0) or 0) if self.cfg else 0
 
-        path = os.path.join(tempfile.gettempdir(),
-                            f"winocr_tts_{uuid.uuid4().hex[:8]}.mp3")
+        path = os.path.join(
+            tempfile.gettempdir(), f"winocr_tts_{uuid.uuid4().hex[:8]}.mp3"
+        )
+
         async def _synth() -> None:
             comm = edge_tts.Communicate(
-                text, voice,
-                rate=f"{rate:+d}%", volume=f"{vol:+d}%")
+                text, voice, rate=f"{rate:+d}%", volume=f"{vol:+d}%"
+            )
             await comm.save(path)
+
         asyncio.run(asyncio.wait_for(_synth(), timeout=25))
         if not os.path.exists(path) or os.path.getsize(path) < 256:
             self._rm(path)
@@ -556,12 +656,19 @@ class TtsService:
                 self._sapi_host = _SapiHost()
             return self._sapi_host
 
-    def _speak_sapi(self, text: str, cancel: threading.Event) -> bool:
+    def _speak_sapi(
+        self,
+        text: str,
+        cancel: threading.Event,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> bool:
         """走 PowerShell 的 System.Speech（离线兜底），**复用常驻进程**。
 
         P2-11：优先用 `_SapiHost` 常驻进程（免每次冷启动 + 免临时文件）；
         任何失败（启动/握手/宿主死亡）都回落 `_speak_sapi_oneshot`（旧行为），
         保证离线场景「点了就有声」，永不静默失效。
+
+        on_progress 通过 SAPI SpeakProgress 事件回调逐词进度。
         """
         if os.name != "nt":
             return False
@@ -569,15 +676,18 @@ class TtsService:
         vol = int(getattr(self.cfg, "volume", 0) or 0) if self.cfg else 0
         try:
             host = self._get_sapi_host()
-            if host is not None and host.speak(text, cancel, rate, vol):
+            if host is not None and host.speak(
+                text, cancel, rate, vol, on_progress=on_progress
+            ):
                 return True
         except Exception:
             pass
-        # 常驻路径失败 → 一次性 subprocess 兜底
+        # 常驻路径失败 → 一次性 subprocess 兜底（无进度回调）
         return self._speak_sapi_oneshot(text, cancel, rate, vol)
 
-    def _speak_sapi_oneshot(self, text: str, cancel: threading.Event,
-                            rate: int = 0, vol: int = 0) -> bool:
+    def _speak_sapi_oneshot(
+        self, text: str, cancel: threading.Event, rate: int = 0, vol: int = 0
+    ) -> bool:
         """旧实现（兜底）：每次朗读冷启动一个 powershell 进程 + 临时 .txt。
 
         仅在常驻宿主不可用（启动失败 / 握手异常 / 宿主死亡）时调用。
@@ -588,8 +698,9 @@ class TtsService:
         sapi_rate = max(-10, min(10, round(rate / 10)))
         sapi_vol = max(0, min(100, 100 + vol))
 
-        txt_path = os.path.join(tempfile.gettempdir(),
-                                f"winocr_tts_{uuid.uuid4().hex[:8]}.txt")
+        txt_path = os.path.join(
+            tempfile.gettempdir(), f"winocr_tts_{uuid.uuid4().hex[:8]}.txt"
+        )
         try:
             with open(txt_path, "w", encoding="utf-8") as fh:
                 fh.write(text)
@@ -600,13 +711,21 @@ class TtsService:
                 f"$s.Speak([IO.File]::ReadAllText('{txt_path}', "
                 "[Text.Encoding]::UTF8))"
             )
-            flags = 0x08000000 if os.name == "nt" else 0   # CREATE_NO_WINDOW
+            flags = 0x08000000 if os.name == "nt" else 0  # CREATE_NO_WINDOW
             proc = subprocess.Popen(
-                ["powershell", "-NoProfile", "-NonInteractive",
-                 "-ExecutionPolicy", "Bypass", "-Command", script],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=flags)
-            self._proc = proc
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    script,
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=flags,
+            )
             while proc.poll() is None:
                 if cancel.is_set():
                     try:

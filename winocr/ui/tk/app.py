@@ -9,6 +9,7 @@
 线程安全铁律：任何非主线程都不得直接碰 Tk 部件。
 所有回写统一走 self.post()，这是 2.0「偶发卡死 / 控件状态错乱」的根治办法。
 """
+
 from __future__ import annotations
 
 import logging
@@ -53,7 +54,6 @@ def _sel_log_static(msg: str, level: int = logging.DEBUG) -> None:
 # winocr/services/capture/selection.py，上面以别名形式导入，仅供向后兼容。
 
 
-
 # busy 看门狗秒数：后台任务（OCR→翻译→AI）超时仍无回调时强制解锁，防界面"假死"。
 # 15s 对 medium 档 OCR（实测 ~10s）+ 翻译 / 云端视觉 OCR 不够，曾导致并行识别；
 # 30s 足够覆盖正常链路，又不会让卡死拖太久。
@@ -65,18 +65,18 @@ class TkUi(UiAdapter):
         self.app = None
         self.root = None
         self.window = None
-        self._busy = threading.Event()      # 仅用于避免重复触发，不是状态机
-        self._translate_note = ""           # 本次翻译的方向说明，用完即清
+        self._busy = threading.Event()  # 仅用于避免重复触发，不是状态机
+        self._translate_note = ""  # 本次翻译的方向说明，用完即清
         # 跨线程 UI 更新队列：所有 post() 先把回调入队，由主线程的 _pump_ui
         # 定时取出执行。这样彻底绕开「非主线程直接调 root.after」在 Tk 下的
         # 不稳定（偶发回调不被泵起、图贴/状态卡在旧值），是根治「异步结果不刷新」
         # 的可靠手段。队列本身线程安全，入队不会阻塞调用方。
         self._ui_queue = _queue.Queue()
         self._pump_running = False
-        self._pump_last = 0.0             # 泵最近一次执行的时刻（自愈心跳用）
-        self._ui_thread = None            # 创建 Tk 主循环的那条线程（UI 线程守卫用）
-        self._cancel_event = threading.Event()   # 任务取消令牌：用户可在长任务期间中断
-        self._mask_windows = []            # 当前活动蒙版翻译窗口（供热键强制刷新定位）
+        self._pump_last = 0.0  # 泵最近一次执行的时刻（自愈心跳用）
+        self._ui_thread = None  # 创建 Tk 主循环的那条线程（UI 线程守卫用）
+        self._cancel_event = threading.Event()  # 任务取消令牌：用户可在长任务期间中断
+        self._mask_windows = []  # 当前活动蒙版翻译窗口（供热键强制刷新定位）
 
     # ------------------------------------------------------------------
     def bind(self, app) -> None:
@@ -88,17 +88,25 @@ class TkUi(UiAdapter):
         # 装了 tkinterdnd2 就用它（拖放生效）；没装回退普通 Tk（拖放不可用但程序照常）。
         try:
             from tkinterdnd2 import TkinterDnD
+
             self.root = TkinterDnD.Tk()
         except Exception:
             import tkinter as tk
+
             self.root = tk.Tk()
 
         # 记录 UI 主线程：所有 Tk 控件访问必须发生在这条线程（见 guards.ui_thread）
         self._ui_thread = threading.current_thread()
 
+        # 3.4.21 接管 Tkinter 回调异常（按钮点击等事件抛异常时自动转储 crash 日志）
+        from ...core.crash_handler import patch_tkinter
+
+        patch_tkinter(self.root)
+
         self._setup_style()
 
         from .main_window import MainWindow
+
         self.window = MainWindow(self)
 
         self._wire_events()
@@ -115,19 +123,22 @@ class TkUi(UiAdapter):
         self._tray = None
         try:
             from .tray import TrayIcon
-            self._tray = TrayIcon(show_cb=self.show_window,
-                                  quit_cb=self._tray_quit)
+
+            self._tray = TrayIcon(show_cb=self.show_window, quit_cb=self._tray_quit)
             if self._tray.start():
                 _sel_log_static("tray icon enabled", logging.INFO)
         except Exception as e:
             logger.warning("[托盘] 初始化失败（忽略）: %s", e)
 
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
-        self._start_pump()                   # 主线程启动跨线程 UI 队列泵
+        self._start_pump()  # 主线程启动跨线程 UI 队列泵
         from ...version import __version__
+
         _sel_log_static(
             "=== WinOCR %s UI started (pump_running=%s) ==="
-            % (__version__, self._pump_running), logging.INFO)
+            % (__version__, self._pump_running),
+            logging.INFO,
+        )
         self.root.mainloop()
 
     # ------------------------------------------------------------------
@@ -141,6 +152,7 @@ class TkUi(UiAdapter):
                 return False
             # 配置文件若存在且用户配置过任何 Key（即使当前为空）不再打扰
             from ...core.paths import config_path
+
             p = config_path()
             if p and p.is_file():
                 try:
@@ -156,6 +168,7 @@ class TkUi(UiAdapter):
     def _show_first_run(self) -> None:
         try:
             from .dialogs import open_first_run
+
             open_first_run(self.window)
         except Exception as e:
             logger.warning("[首次运行向导] 弹出失败: %s", e)
@@ -163,20 +176,23 @@ class TkUi(UiAdapter):
     def _setup_style(self) -> None:
         cfg = self.app.config
         from ...version import __version__
+
         # 按配置加载配色主题（多主题 + 浅/深 + 自定义覆盖）+ 字号
         dark = False
         try:
             from . import theme
+
             fam, mode = theme.parse_theme(cfg.ui.theme)
             theme.set_active(fam, mode, cfg.ui.theme_colors)
             theme.set_font_size(cfg.ui.font_size)
-            dark = (mode == "dark")
+            dark = mode == "dark"
         except Exception:
             pass
         self.root.title(f"WinOCR {__version__} — 截图识字 · 翻译 · AI")
         self.root.geometry(cfg.ui.window_size)
         self.root.minsize(640, 460)
         from .style import apply_ttk_style
+
         apply_ttk_style(self.root, dark)
 
     def _bind_global_keys(self) -> None:
@@ -213,6 +229,7 @@ class TkUi(UiAdapter):
         except Exception:
             pass
         from .main_window import MainWindow
+
         self.window = MainWindow(self)
 
     # ------------------------------------------------------------------
@@ -231,7 +248,7 @@ class TkUi(UiAdapter):
         try:
             self._ui_queue.put((fn, args, kwargs), block=False)
         except Exception:
-            pass                              # 队列满/销毁，安静丢弃
+            pass  # 队列满/销毁，安静丢弃
         if self.root is None:
             return
         # 泵自愈心跳：若泵声称在跑但已超过 1.5s 没有执行（意外死亡/续期失败），
@@ -243,7 +260,7 @@ class TkUi(UiAdapter):
             self._pump_running = True
             self._pump_last = time.time()
             try:
-                self.root.after(0, self._pump_ui)   # 一次跨线程引导，仅此一次
+                self.root.after(0, self._pump_ui)  # 一次跨线程引导，仅此一次
             except Exception:
                 self._pump_running = False
 
@@ -273,13 +290,12 @@ class TkUi(UiAdapter):
                 try:
                     fn(*args, **kwargs)
                 except Exception:
-                    pass                      # 单条 UI 回调异常不能拖垮整个泵
+                    pass  # 单条 UI 回调异常不能拖垮整个泵
         finally:
             try:
                 self.root.after(40, self._pump_ui)
             except Exception:
                 self._pump_running = False
-
 
     def status(self, text: str) -> None:
         self.post(self.window.set_status, text)
@@ -294,14 +310,24 @@ class TkUi(UiAdapter):
     def _wire_events(self) -> None:
         bus = self.app.bus
         bus.subscribe(Events.STATUS, lambda t: self.post(self.window.set_status, t))
-        bus.subscribe(Events.ERROR, lambda t: self.post(self.window.set_status, f"❌ {t}"))
-        bus.subscribe(Events.OCR_START, lambda _: self.post(
-            self.window.set_status, "识别中…"))
-        bus.subscribe(Events.OCR_DONE, lambda r: self.post(self.window.show_original, r.text))
-        bus.subscribe(Events.TRANSLATE_START, lambda _: self.post(
-            self.window.set_status, "翻译中…" + self._take_translate_note()))
-        bus.subscribe(Events.TRANSLATE_DONE, lambda r: self.post(
-            self.window.show_translation, r))
+        bus.subscribe(
+            Events.ERROR, lambda t: self.post(self.window.set_status, f"❌ {t}")
+        )
+        bus.subscribe(
+            Events.OCR_START, lambda _: self.post(self.window.set_status, "识别中…")
+        )
+        bus.subscribe(
+            Events.OCR_DONE, lambda r: self.post(self.window.show_original, r.text)
+        )
+        bus.subscribe(
+            Events.TRANSLATE_START,
+            lambda _: self.post(
+                self.window.set_status, "翻译中…" + self._take_translate_note()
+            ),
+        )
+        bus.subscribe(
+            Events.TRANSLATE_DONE, lambda r: self.post(self.window.show_translation, r)
+        )
         bus.subscribe(Events.TRANSLATE_DONE, self._maybe_auto_read)
 
     def _maybe_auto_read(self, result) -> None:
@@ -315,8 +341,8 @@ class TkUi(UiAdapter):
     _HOTKEY_DEFAULTS = {
         # 截图翻译用 A 而非 S：Ctrl+Shift+S 被大量软件（IDE 另存为、微信截图）占用
         "snap_translate": "ctrl+shift+a",
-        "mask_translate": "ctrl+shift+m",   # 蒙版翻译：默认全局快捷键（启动框选）
-        "mask_refresh": "ctrl+shift+n",     # 蒙版刷新：已有蒙版时强制重译（替代右键）
+        "mask_translate": "ctrl+shift+m",  # 蒙版翻译：默认全局快捷键（启动框选）
+        "mask_refresh": "ctrl+shift+n",  # 蒙版刷新：已有蒙版时强制重译（替代右键）
         "clipboard_extract": "ctrl+shift+c",
         "translate_text": "ctrl+shift+t",
         "cycle_engine": "ctrl+shift+e",
@@ -341,18 +367,22 @@ class TkUi(UiAdapter):
             "import_knowledge": lambda: self.post(self._import_knowledge),
             "cancel": lambda: self.post(self.do_cancel),
             "mask_translate": lambda: self.post(
-                lambda: self.run_capsule("mask_translate")),
+                lambda: self.run_capsule("mask_translate")
+            ),
             "mask_refresh": lambda: self.post(self.refresh_mask_windows),
             "quit": lambda: self.post(self.quit_app),
         }
         ok = self.app.start_hotkeys(handlers, defaults=self._HOTKEY_DEFAULTS)
         summary = self.app.hotkeys.summary()
-        self.window.set_status(("就绪 — " + summary) if ok else ("就绪（" + summary + "）"))
+        self.window.set_status(
+            ("就绪 — " + summary) if ok else ("就绪（" + summary + "）")
+        )
 
     def _open_knowledge(self) -> None:
         """全局热键「打开知识库」：打开知识库管理面板（导入/检索/导出都在内）。"""
         try:
             from .dialogs import open_knowledge
+
             open_knowledge(self.window)
         except Exception as e:
             self.window.set_status(f"打开知识库失败: {e}")
@@ -361,6 +391,7 @@ class TkUi(UiAdapter):
         """全局热键「导入知识库」：直接弹导入流程（选文件 + 选项目）。"""
         try:
             from .dialogs import open_import_dialog
+
             open_import_dialog(self.window)
         except Exception as e:
             self.window.set_status(f"导入知识库失败: {e}")
@@ -370,6 +401,7 @@ class TkUi(UiAdapter):
         TTS 预热现在会真合成一段极短文本，把 edge 的 DNS/TLS/WebSocket
         链路预热好（首声延迟从 ~19s 降到 ~3s），不阻塞启动。
         """
+
         def _work():
             ocr = self.app.services.get("ocr")
             if ocr is not None and ocr.available():
@@ -380,6 +412,7 @@ class TkUi(UiAdapter):
                     tts.warmup()
                 except Exception:
                     pass
+
         threading.Thread(target=_work, daemon=True, name="winocr-warmup").start()
 
     # ==================================================================
@@ -392,6 +425,7 @@ class TkUi(UiAdapter):
         不走事件总线。胶囊第三参接收本 TkUi 实例，用于取主 Tk 与线程安全回写。
         """
         import logging
+
         cap_cls = self.app.capsules.get(name)
         if cap_cls is None:
             # 注册表按类名索引；name 字段（如 "mask_translate"）作第二索引兜底
@@ -404,7 +438,8 @@ class TkUi(UiAdapter):
             return
         try:
             from winocr.core.capsule import CapsuleContext
-            cap = cap_cls()                      # 注册表存的是类，必须实例化
+
+            cap = cap_cls()  # 注册表存的是类，必须实例化
             ctx = CapsuleContext()
             cap.run(ctx, self.app.pipeline, self)
         except Exception as e:
@@ -430,7 +465,7 @@ class TkUi(UiAdapter):
             self.status("未找到截图捕获源")
             return
         src.configure(parent=self.root)
-        self.root.withdraw()                       # 让主窗口先让开
+        self.root.withdraw()  # 让主窗口先让开
         self.root.after(160, lambda: self._snap_stage2(src))
 
     def _snap_stage2(self, src) -> None:
@@ -503,9 +538,12 @@ class TkUi(UiAdapter):
         watchdog.start()
         self.app.pipeline.run_async(
             self.app.pipeline.extract_and_translate,
-            capture, self.app.config.translate.target,
-            on_done=_done_wrapped, on_error=_err_wrapped,
-            cancel_event=self._cancel_event)
+            capture,
+            self.app.config.translate.target,
+            on_done=_done_wrapped,
+            on_error=_err_wrapped,
+            cancel_event=self._cancel_event,
+        )
 
     def do_translate(self, target: str = None) -> None:
         """翻译。target 由按钮显式传入时（译中/译英），方向不再被自动纠正。
@@ -533,14 +571,16 @@ class TkUi(UiAdapter):
                 text, origin = trans, "译文"
             else:
                 lang = self.window.lang_label(target)
-                self.status(f"原文已经是{lang}了，无需翻译" if orig
-                            else "没有可翻译的文字")
+                self.status(
+                    f"原文已经是{lang}了，无需翻译" if orig else "没有可翻译的文字"
+                )
                 return
 
         # 交给 TRANSLATE_START 事件统一显示，避免我这条被事件回调覆盖掉
         self._translate_note = f"（{origin} → {self.window.lang_label(target)}）"
-        self.app.pipeline.run_async(self.app.pipeline.translate, text, target,
-                                    explicit=explicit)
+        self.app.pipeline.run_async(
+            self.app.pipeline.translate, text, target, explicit=explicit
+        )
 
     def do_switch_engine(self) -> None:
         disp = self.app.services.get("translate")
@@ -548,7 +588,9 @@ class TkUi(UiAdapter):
         self.app.config.translate.engine = new
         self.app.apply_config()
         self.window.refresh_engine_label()
-        self.status(f"翻译引擎已切换为：{disp.engine_display(new) if new != 'auto' else '自动回退链'}")
+        self.status(
+            f"翻译引擎已切换为：{disp.engine_display(new) if new != 'auto' else '自动回退链'}"
+        )
 
     def _release_busy(self) -> None:
         """无论成功还是异常，最终都要释放 busy 锁，避免界面"假死"。
@@ -590,15 +632,17 @@ class TkUi(UiAdapter):
         # 即时弹窗：按键发生的【同一瞬间】先把图贴弹出来（加载中占位），
         # 让用户立刻看到反馈；真正的取词+翻译在独立工作线程异步完成后回填。
         # 若已有翻译任务在途（busy）则不再重复弹空窗，避免「处理中」闪烁。
-        self._sel_log("hotkey: selection_translate triggered, busy=%s" % self._busy.is_set())
+        self._sel_log(
+            "hotkey: selection_translate triggered, busy=%s" % self._busy.is_set()
+        )
         if not self._busy.is_set():
             self.post(self.window.show_sticker, "", "⏳ 取词/翻译中…")
             self._sel_log("hotkey: placeholder posted")
         else:
             self._sel_log("hotkey: busy, skipped instant popup")
         threading.Thread(
-            target=self._capture_and_translate,
-            daemon=True, name="winocr-selcap").start()
+            target=self._capture_and_translate, daemon=True, name="winocr-selcap"
+        ).start()
 
     def _capture_and_translate(self) -> None:
         """工作线程体：取词 → 投递主线程翻译弹图。"""
@@ -607,16 +651,22 @@ class TkUi(UiAdapter):
             text, src = self._capture_selection()
             self._sel_log("worker: capture done src=%s len=%d" % (src, len(text)))
             if not text:
-                self.post(self.window.show_sticker, "",
-                          "没有可翻译的文本：\n先在其它软件选中文字，再按 Ctrl+Shift+D。")
+                self.post(
+                    self.window.show_sticker,
+                    "",
+                    "没有可翻译的文本：\n先在其它软件选中文字，再按 Ctrl+Shift+D。",
+                )
                 self._sel_log("worker: no-text sticker posted")
                 return
             self._sel_log("key-trigger src=%s len=%d -> translate" % (src, len(text)))
             self.post(self._translate_to_sticker, text, "划词")
         except Exception as e:
             self._sel_log("worker: capture crashed: %r" % (e,))
-            self.post(self.window.show_sticker, "",
-                      f"取词失败：{e}\n请检查选中内容或重启 WinOCR。")
+            self.post(
+                self.window.show_sticker,
+                "",
+                f"取词失败：{e}\n请检查选中内容或重启 WinOCR。",
+            )
 
     def _capture_selection(self):
         """读取【当前屏幕任意处】选中文本。返回 (text, src)。
@@ -626,11 +676,13 @@ class TkUi(UiAdapter):
         运行在独立工作线程（见 _on_hotkey_selection），确保目标软件仍持有焦点。
         """
         from ...services.capture.selection import SelectionCapturer
+
         return SelectionCapturer(log=self._sel_log).capture()
 
     # ---- 划词翻译共用的「翻译并弹贴条」核心 ----
-    def _translate_to_sticker(self, text: str, note: str = "划词",
-                               target=None, explicit: bool = False) -> bool:
+    def _translate_to_sticker(
+        self, text: str, note: str = "划词", target=None, explicit: bool = False
+    ) -> bool:
         """翻译 ``text``，把原文 + 译文弹到划词小贴条。
 
         带 busy 守卫（防重复触发叠加）与 30s 看门狗（异常卡死兜底）。
@@ -647,7 +699,7 @@ class TkUi(UiAdapter):
             self._sel_log("translate: empty text, skipped")
             return False
         if target is None:
-            target = self.app.config.translate.target   # None = 自动检测方向
+            target = self.app.config.translate.target  # None = 自动检测方向
             explicit = False
         self.status(f"{note}翻译中…")
         self._busy.set()
@@ -658,11 +710,14 @@ class TkUi(UiAdapter):
         # 否则用户会以为图贴永远卡死。注意看门狗跑在 Timer 线程，所有 UI 操作走 post。
         def _on_watchdog():
             if self._cancel_event.is_set():
-                return                      # 已取消：不要弹出"超时"误报
+                return  # 已取消：不要弹出"超时"误报
             self._sel_log("translate: watchdog timeout")
             self._release_busy()
-            self.post(self.window.show_sticker, text,
-                      "翻译超时：模型/网络未响应，请检查配置或稍后重试。")
+            self.post(
+                self.window.show_sticker,
+                text,
+                "翻译超时：模型/网络未响应，请检查配置或稍后重试。",
+            )
             self.post(self.window.set_status, f"{note}翻译超时")
 
         watchdog = threading.Timer(_BUSY_WATCHDOG_SECONDS, _on_watchdog)
@@ -674,7 +729,7 @@ class TkUi(UiAdapter):
             self._release_busy()
             _t = getattr(result, "text", "") or ""
             try:
-                self.app.pipeline.record(text, _t)   # 划词翻译也进历史
+                self.app.pipeline.record(text, _t)  # 划词翻译也进历史
             except Exception:
                 pass
             self.post(self.window.show_sticker, text, _t)
@@ -694,12 +749,20 @@ class TkUi(UiAdapter):
         watchdog.start()
         self._sel_log("translate: run_async start")
         self.app.pipeline.run_async(
-            self.app.pipeline.translate, text, target, explicit,
-            on_done=_done, on_error=_err, cancel_event=self._cancel_event)
+            self.app.pipeline.translate,
+            text,
+            target,
+            explicit,
+            silent=True,  # 划词结果只进小图贴，不广播事件覆盖主界面译文区
+            on_done=_done,
+            on_error=_err,
+            cancel_event=self._cancel_event,
+        )
         return True
 
-    def translate_sticker(self, text: str, target: str = None,
-                          note: str = "划词") -> None:
+    def translate_sticker(
+        self, text: str, target: str = None, note: str = "划词"
+    ) -> None:
         """划词小贴条「自动/译中/译英」方向按钮的入口。
 
         先弹「翻译中」占位，再按所选方向重译；结果经事件总线回填同一贴条。
@@ -710,8 +773,8 @@ class TkUi(UiAdapter):
             return
         self.post(self.window.show_sticker, text or "", "⏳ 翻译中…")
         self._translate_to_sticker(
-            text, note=note, target=target, explicit=(target is not None))
-
+            text, note=note, target=target, explicit=(target is not None)
+        )
 
     # ---- 划词翻译（按键触发：Ctrl+Shift+D → 主线程取词 → 弹贴图） ----
     # 取词经 self.post(after(0)) 在主线程执行：用户松开热键、贴图尚未弹出，
@@ -732,6 +795,7 @@ class TkUi(UiAdapter):
 
         再次触发（热键/按钮）时若正在朗读，则视为「停止」——
         朗读没有停止手段是很折磨人的（读了 3000 字停不下来）。
+        朗读期间在对应文本区显示淡蓝透亮蒙版，读到哪里蒙版跟到哪里。
         """
         tts = self.app.services.get("tts")
         if tts is None:
@@ -740,20 +804,43 @@ class TkUi(UiAdapter):
 
         if text is None and tts.speaking():
             tts.stop()
+            self.window.tts_highlight_stop()
             self.status("已停止朗读")
             return
 
+        widget = None
         if text is None:
-            text = (self.window.get_selected_text().strip()
-                    or self.window.get_translation().strip()
-                    or self.window.get_original().strip())
+            text, widget = self.window.tts_source_widget()
+        else:
+            # 显式传入文本（如自动朗读译文）：蒙版定位到译文区
+            widget = self.window.txt_translated
         text = (text or "").strip()
         if not text:
             self.status("没有可朗读的文本")
             return
 
-        # on_status 来自 TTS 后台线程，必须 post 回主线程再动界面
-        tts.speak(text, on_status=lambda m: self.post(lambda: self.status(m)))
+        # 启动淡蓝透亮蒙版
+        self.window.tts_highlight_start(widget)
+
+        # on_status / on_progress 来自 TTS 后台线程，必须 post 回主线程再动界面
+        def _on_status(msg):
+            def _ui():
+                self.status(msg)
+                # 只在最终状态（完成/失败/edge-only 不可用）时清除蒙版，
+                # 中间状态（"改用系统语音…"）不清除——SAPI 降级还要继续蒙版
+                if msg and (
+                    "朗读完成" in msg
+                    or msg.startswith("朗读失败")
+                    or msg.startswith("Edge 在线语音不可用")
+                ):
+                    self.window.tts_highlight_stop()
+
+            self.post(_ui)
+
+        def _on_progress(off, ln):
+            self.post(lambda: self.window.tts_highlight_update(off, ln))
+
+        tts.speak(text, on_status=_on_status, on_progress=_on_progress)
 
     def do_cancel(self) -> None:
         """取消当前正在进行的任务（OCR / 翻译）。
@@ -796,9 +883,11 @@ class TkUi(UiAdapter):
             self.post(self.quit_app)
         except Exception:
             pass
+
         def _force():
             time.sleep(2)
             _force_exit_venv_tree()
+
         threading.Thread(target=_force, daemon=True).start()
 
     def quit_app(self) -> None:
@@ -814,13 +903,13 @@ class TkUi(UiAdapter):
         try:
             tts = self.app.services.get("tts")
             if tts is not None:
-                tts.stop()                  # 别让声音在进程退出后还响着
+                tts.stop()  # 别让声音在进程退出后还响着
         except Exception:
             pass
         try:
             tray = getattr(self, "_tray", None)
             if tray is not None:
-                tray.stop()                 # 内部已 join 托盘线程（≤2s）
+                tray.stop()  # 内部已 join 托盘线程（≤2s）
         except Exception:
             pass
         try:

@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WinOCR 3.4 界面原型 — 主窗口 · GUI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   WinOCR 3.4 — 设计令牌
+   风格：Industrial / 工业实用
+   记忆点：琥珀橙 + 高密度信息 + 等宽数字
+   ============================================================ */
+:root {
+  --bg: #14161a; --surface: #1e2127; --surface2: #26292f; --surface3: #2f333a;
+  --border: rgba(255,255,255,.08); --border2: rgba(255,255,255,.16);
+  --text: #e8e4dc; --text2: #a09a90; --text3: #6b6560;
+  --accent: #ff6b2c; --accent-d: rgba(255,107,44,.15);
+  --ok: #4ade80; --ok-d: rgba(74,222,128,.12);
+  --warn: #fbbf24; --warn-d: rgba(251,191,36,.12);
+  --err: #f87171; --info: #60a5fa; --info-d: rgba(96,165,250,.12);
+  --font-d: 'Archivo Black','Noto Sans SC',system-ui,sans-serif;
+  --font-b: 'IBM Plex Sans','Noto Sans SC',system-ui,sans-serif;
+  --font-m: 'JetBrains Mono','Cascadia Code',Consolas,monospace;
+  --r1:3px; --r2:6px; --r3:10px;
+  --s1:0 1px 3px rgba(0,0,0,.24); --s2:0 4px 12px rgba(0,0,0,.32); --s3:0 12px 32px rgba(0,0,0,.42);
+  --ease: cubic-bezier(.16,1,.3,1); --ease-io: cubic-bezier(.4,0,.2,1);
+  --d1:150ms; --d2:280ms; --d3:500ms;
+  --sp1:4px; --sp2:8px; --sp3:12px; --sp4:16px; --sp5:20px; --sp6:24px; --sp7:32px; --sp8:40px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:13px;-webkit-font-smoothing:antialiased}
+body{font-family:var(--font-b);background:var(--bg);color:var(--text);line-height:1.5;overflow:hidden;height:100vh}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
+::selection{background:var(--accent-d);color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+
+/* ============================================================
+   应用外框
+   ============================================================ */
+.app{display:flex;flex-direction:column;height:100vh}
+
+/* ---------- 标题栏 ---------- */
+.titlebar{display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 var(--sp4);background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;user-select:none}
+.titlebar-left,.titlebar-right{display:flex;align-items:center;gap:var(--sp3)}
+.app-icon{width:20px;height:20px;background:var(--accent);border-radius:var(--r1);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--bg)}
+.titlebar-title{font-size:12px;font-weight:500;letter-spacing:.02em}
+.titlebar-ver{font-family:var(--font-m);font-size:11px;color:var(--text3);background:var(--surface2);padding:2px 6px;border-radius:var(--r1)}
+.tb-btn{width:28px;height:28px;display:grid;place-items:center;border-radius:var(--r1);color:var(--text2);font-size:14px;transition:all var(--d1)}
+.tb-btn:hover{background:var(--surface2);color:var(--text)}
+.tb-btn.close:hover{background:var(--err);color:#fff}
+
+/* ---------- 导航+内容 ---------- */
+.app-body{display:flex;flex:1;overflow:hidden}
+
+/* ---------- 侧边栏 ---------- */
+.sidebar{width:52px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:var(--sp3) 0;gap:var(--sp1);flex-shrink:0}
+.nav-btn{width:38px;height:38px;display:grid;place-items:center;border-radius:var(--r2);color:var(--text3);transition:all var(--d1) var(--ease);font-size:16px;position:relative;cursor:pointer}
+.nav-btn:hover{background:var(--surface2);color:var(--text2)}
+.nav-btn.active{background:var(--accent-d);color:var(--accent)}
+.nav-btn.active::before{content:'';position:absolute;left:-1px;top:50%;transform:translateY(-50%);width:2px;height:18px;background:var(--accent);border-radius:0 2px 2px 0}
+.nav-sep{width:22px;height:1px;background:var(--border);margin:var(--sp2) 0}
+.nav-sp{flex:1}
+
+/* ---------- 视图容器 ---------- */
+.view-wrap{flex:1;overflow:hidden;position:relative}
+.view{display:none;height:100%;flex-direction:column}
+.view.active{display:flex}
+
+/* ============================================================
+   通用工具栏
+   ============================================================ */
+.toolbar{display:flex;align-items:center;justify-content:space-between;padding:var(--sp3) var(--sp5);background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.toolbar-l,.toolbar-r{display:flex;align-items:center;gap:var(--sp2)}
+.toolbar-label{font-size:12px;color:var(--text2);font-weight:500}
+.toolbar-sep{width:1px;height:18px;background:var(--border)}
+
+/* ---------- 按钮系统 ---------- */
+.btn{display:inline-flex;align-items:center;gap:var(--sp2);padding:var(--sp2) var(--sp4);border-radius:var(--r2);font-size:12px;font-weight:500;transition:all var(--d1) var(--ease);white-space:nowrap;height:30px}
+.btn-p{background:var(--accent);color:var(--bg)}
+.btn-p:hover{background:#ff7f45;transform:translateY(-1px);box-shadow:var(--s2)}
+.btn-p:active{transform:translateY(0)}
+.btn-g{background:transparent;color:var(--text2);border:1px solid var(--border)}
+.btn-g:hover{background:var(--surface2);color:var(--text);border-color:var(--border2)}
+.btn-g.active{background:var(--accent-d);color:var(--accent);border-color:var(--accent)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* ============================================================
+   通用面板组件
+   ============================================================ */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r3);overflow:hidden}
+.panel-h{display:flex;align-items:center;justify-content:space-between;padding:var(--sp3) var(--sp4);border-bottom:1px solid var(--border);font-weight:600;font-size:13px}
+.panel-b{padding:var(--sp4)}
+
+/* ============================================================
+   设置视图
+   ============================================================ */
+.settings-view{flex-direction:column;overflow-y:auto}
+.settings-c{padding:var(--sp6) var(--sp8);max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:var(--sp6)}
+.set-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:var(--sp4)}
+.set-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--r3);overflow:hidden}
+.set-sh{padding:var(--sp4) var(--sp5);border-bottom:1px solid var(--border);font-weight:600;font-size:13px}
+.set-sb{padding:var(--sp5)}
+.set-row{display:flex;align-items:center;justify-content:space-between;padding:var(--sp3) 0;gap:var(--sp4)}
+.set-row+.set-row{border-top:1px solid var(--border)}
+.set-lbl{font-size:12px;color:var(--text2);min-width:100px}
+.set-val{font-family:var(--font-m);font-size:12px;color:var(--text)}
+.set-select{background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:var(--sp2) var(--sp3);font-size:12px;min-width:120px;cursor:pointer}
+.set-select:focus{outline:none;border-color:var(--accent)}
+.toggle{width:34px;height:18px;background:var(--surface3);border-radius:9px;position:relative;cursor:pointer;transition:background var(--d1)}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;background:var(--text);border-radius:50%;transition:transform var(--d1) var(--ease)}
+.toggle.on{background:var(--accent)}
+.toggle.on::after{transform:translateX(16px)}
+
+/* 链接按钮 */
+.link-btn{font-size:12px;color:var(--info);cursor:pointer;text-decoration:none;padding:var(--sp1) var(--sp2);border-radius:var(--r1);transition:all var(--d1)}
+.link-btn:hover{background:var(--info-d);text-decoration:underline}
+
+/* 输入框 */
+.input{background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:var(--sp2) var(--sp3);font-size:12px;font-family:var(--font-m)}
+.input:focus{outline:none;border-color:var(--accent)}
+.input::placeholder{color:var(--text3)}
+
+/* 组合输入 */
+.combo-input{display:flex;gap:var(--sp2);align-items:center}
+.combo-input .input{flex:1}
+
+/* ============================================================
+   AI CHAT 视图
+   ============================================================ */
+.chat-view{flex-direction:column;overflow:hidden}
+.chat-msgs{flex:1;overflow-y:auto;padding:var(--sp5);display:flex;flex-direction:column;gap:var(--sp4)}
+.chat-msg{display:flex;gap:var(--sp3);max-width:88%;animation:msgIn var(--d2) var(--ease) both}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.chat-msg.user{align-self:flex-end;flex-direction:row-reverse}
+.chat-msg.assistant{align-self:flex-start}
+.chat-avatar{width:28px;height:28px;border-radius:var(--r2);display:grid;place-items:center;font-size:11px;font-weight:600;flex-shrink:0}
+.chat-avatar.user{background:var(--info-d);color:var(--info)}
+.chat-avatar.asst{background:var(--accent-d);color:var(--accent)}
+.chat-bubble{padding:var(--sp3) var(--sp4);border-radius:var(--r3);font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.chat-bubble.user{background:var(--info-d);color:var(--text);border-bottom-right-radius:var(--r1)}
+.chat-bubble.asst{background:var(--surface);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:var(--r1)}
+.chat-bubble.asst strong{color:var(--accent)}
+.chat-bubble code{background:var(--bg);border:1px solid var(--border);border-radius:var(--r1);padding:1px 5px;font-family:var(--font-m);font-size:11px;color:var(--accent)}
+.chat-input-area{padding:var(--sp4) var(--sp5);background:var(--surface);border-top:1px solid var(--border);display:flex;gap:var(--sp3);align-items:flex-end}
+.chat-input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--r3);padding:var(--sp3) var(--sp4);resize:none;min-height:40px;max-height:120px;font-size:13px;line-height:1.5}
+.chat-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-d)}
+.chat-send{width:40px;height:40px;border-radius:var(--r3);background:var(--accent);color:var(--bg);display:grid;place-items:center;font-size:17px;transition:all var(--d1) var(--ease);flex-shrink:0}
+.chat-send:hover{background:#ff7f45;transform:scale(1.04)}
+.chat-send:active{transform:scale(.96)}
+.chat-opt{display:flex;gap:var(--sp2);align-items:center;padding:var(--sp2) var(--sp5);background:var(--surface2);border-top:1px solid var(--border);font-size:11px;color:var(--text3)}
+
+/* ============================================================
+   历史记录视图
+   ============================================================ */
+.hist-view{flex-direction:column;overflow:hidden}
+.hist-list{flex:1;overflow-y:auto;padding:var(--sp4);display:flex;flex-direction:column;gap:var(--sp3)}
+.hist-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--r3);padding:var(--sp4);transition:all var(--d1);cursor:pointer}
+.hist-item:hover{border-color:var(--border2);background:var(--surface2);transform:translateX(2px)}
+.hist-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp2)}
+.hist-time{font-family:var(--font-m);font-size:11px;color:var(--text3)}
+.hist-badge{font-size:11px;padding:2px 7px;border-radius:9px;font-weight:500}
+.hist-badge.ocr{background:var(--info-d);color:var(--info)}
+.hist-badge.tr{background:var(--accent-d);color:var(--accent)}
+.hist-badge.ai{background:var(--ok-d);color:var(--ok)}
+.hist-txt{font-size:12px;color:var(--text2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* ============================================================
+   模型管理视图
+   ============================================================ */
+.models-view{flex-direction:column;overflow:hidden}
+.models-list{flex:1;overflow-y:auto;padding:var(--sp4);display:flex;flex-direction:column;gap:var(--sp3)}
+.model-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--r3);padding:var(--sp4);display:flex;align-items:center;justify-content:space-between;transition:all var(--d1)}
+.model-item:hover{border-color:var(--border2);background:var(--surface2)}
+.model-info{display:flex;flex-direction:column;gap:var(--sp1)}
+.model-name{font-size:13px;font-weight:600}
+.model-path{font-family:var(--font-m);font-size:11px;color:var(--text3)}
+.model-badge-row{display:flex;gap:var(--sp2);align-items:center}
+.model-status{font-size:11px;padding:2px 8px;border-radius:9px;font-weight:500}
+.model-status.ok{background:var(--ok-d);color:var(--ok)}
+.model-status.warn{background:var(--warn-d);color:var(--warn)}
+.model-size{font-family:var(--font-m);font-size:11px;color:var(--text3)}
+
+/* ============================================================
+   插件视图
+   ============================================================ */
+.plugins-view{flex-direction:column;overflow:hidden}
+.plugins-list{flex:1;overflow-y:auto;padding:var(--sp4);display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--sp4)}
+.plugin-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r3);padding:var(--sp5);display:flex;flex-direction:column;gap:var(--sp3);transition:all var(--d1)}
+.plugin-card:hover{border-color:var(--border2);background:var(--surface2)}
+.plugin-icon{width:36px;height:36px;border-radius:var(--r2);background:var(--info-d);display:grid;place-items:center;font-size:18px}
+.plugin-name{font-size:14px;font-weight:600}
+.plugin-desc{font-size:12px;color:var(--text2);line-height:1.6}
+.plugin-meta{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text3)}
+
+/* ============================================================
+   状态栏
+   ============================================================ */
+.sbar{display:flex;align-items:center;justify-content:space-between;height:26px;padding:0 var(--sp4);background:var(--surface);border-top:1px solid var(--border);flex-shrink:0}
+.sbar-l,.sbar-r{display:flex;align-items:center;gap:var(--sp4)}
+.sbar-item{display:flex;align-items:center;gap:var(--sp2);font-size:11px;color:var(--text3)}
+.sdot{width:6px;height:6px;border-radius:50%}
+.sdot.rdy{background:var(--ok)}
+.sdot.busy{background:var(--warn);animation:pulse 1s infinite}
+.sdot.idle{background:var(--text3)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ============================================================
+   响应式
+   ============================================================ */
+@media(max-width:900px){
+  .sidebar{width:44px}
+  .settings-c{padding:var(--sp5) var(--sp4)}
+}
+@media(max-width:640px){
+  .toolbar{flex-wrap:wrap;gap:var(--sp2)}
+  .toolbar-l,.toolbar-r{flex:1;justify-content:space-between}
+  .chat-msgs{padding:var(--sp3)}
+  .hist-list{padding:var(--sp3)}
+  .plugins-list{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app" role="application" aria-label="WinOCR 3.4">
+
+<!-- 标题栏 -->
+<header class="titlebar">
+  <div class="titlebar-left">
+    <div class="app-icon">W</div>
+    <span class="titlebar-title">WinOCR 3.4.18 — 截图识字 · 翻译 · AI</span>
+    <span class="titlebar-ver">v3.4.18</span>
+  </div>
+  <div class="titlebar-right" role="toolbar">
+    <button class="tb-btn" title="最小化">−</button>
+    <button class="tb-btn" title="最大化">□</button>
+    <button class="tb-btn close" title="关闭">✕</button>
+  </div>
+</header>
+
+<!-- 主体 -->
+<div class="app-body">
+  <!-- 侧边导航 -->
+  <nav class="sidebar" aria-label="主导航">
+    <button class="nav-btn active" data-view="screenshot" title="截图翻译">📸</button>
+    <button class="nav-btn" data-view="history" title="历史记录">📋</button>
+    <button class="nav-btn" data-view="chat" title="AI 对话">💬</button>
+    <button class="nav-btn" data-view="models" title="模型管理">🧠</button>
+    <button class="nav-btn" data-view="plugins" title="插件">🧩</button>
+    <div class="nav-sep"></div>
+    <button class="nav-btn" data-view="settings" title="设置">⚙</button>
+    <div class="nav-sp"></div>
+    <button class="nav-btn" title="关于">ℹ</button>
+  </nav>
+
+  <!-- 视图区 -->
+  <main class="view-wrap">
+
+    <!-- ========== 截图翻译（主界面） ========== -->
+    <section class="view active" id="view-screenshot" aria-label="截图翻译">
+      <div class="toolbar">
+        <div class="toolbar-l">
+          <button class="btn btn-p" id="btn-screenshot-demo">📸 截图</button>
+          <div class="toolbar-sep"></div>
+          <button class="btn btn-g">📋 粘贴</button>
+          <button class="btn btn-g">📁 文件</button>
+        </div>
+        <div class="toolbar-r">
+          <button class="btn btn-g active" title="自动翻译">🔄</button>
+          <button class="btn btn-g" title="朗读">🔊</button>
+          <div class="toolbar-sep"></div>
+          <button class="btn btn-g" title="设置语言">🌐</button>
+        </div>
+      </div>
+      <!-- 三栏 -->
+      <div style="display:flex;flex:1;overflow:hidden">
+        <!-- 左：截图预览 -->
+        <aside style="width:300px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0">
+          <div class="panel-h" style="padding:var(--sp3) var(--sp4);border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text2);letter-spacing:.04em">截图预览</div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:var(--sp4);position:relative;overflow:hidden">
+            <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 30% 20%,rgba(255,107,44,.06),transparent 50%),radial-gradient(ellipse at 70% 80%,rgba(96,165,250,.04),transparent 50%);pointer-events:none"></div>
+            <div style="text-align:center;color:var(--text3)">
+              <div style="font-size:40px;opacity:.25;margin-bottom:var(--sp3)">🖼</div>
+              <div style="font-size:12px">点击「截图」开始</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:var(--sp1)">Ctrl+Space</div>
+            </div>
+          </div>
+          <div style="display:flex;padding:var(--sp2);gap:var(--sp1);border-top:1px solid var(--border)">
+            <button class="btn btn-g" style="flex:1;justify-content:center">放大</button>
+            <button class="btn btn-g" style="flex:1;justify-content:center">缩小</button>
+          </div>
+        </aside>
+        <!-- 中：OCR 原文 -->
+        <section style="flex:1;display:flex;flex-direction:column;background:var(--bg);min-width:0">
+          <div class="panel-h" style="padding:var(--sp3) var(--sp4);border-bottom:1px solid var(--border);background:var(--surface);display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;font-weight:600;color:var(--text2);letter-spacing:.04em">原文</span>
+            <div style="display:flex;gap:var(--sp1)">
+              <button class="btn btn-g" style="height:24px;font-size:11px;padding:0 var(--sp2)">复制</button>
+              <button class="btn btn-g" style="height:24px;font-size:11px;padding:0 var(--sp2)">编辑</button>
+            </div>
+          </div>
+          <div style="flex:1;padding:var(--sp5);overflow-y:auto;font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;word-break:break-word" id="source-text">OCR 识别结果将显示在这里...
+          </div>
+        </section>
+        <!-- 右：翻译结果 -->
+        <aside style="width:300px;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0">
+          <div class="panel-h" style="padding:var(--sp3) var(--sp4);border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text2);letter-spacing:.04em">翻译</div>
+          <div style="flex:1;padding:var(--sp5);overflow-y:auto;font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;word-break:break-word" id="translate-text">翻译结果将显示在这里...
+          </div>
+          <div style="padding:var(--sp3) var(--sp4);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+            <span style="font-family:var(--font-m);font-size:11px;color:var(--text3)">EN → 中文</span>
+            <button class="btn btn-g" style="height:24px;font-size:11px;padding:0 var(--sp2)">朗读</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ========== 历史记录 ========== -->
+    <section class="view" id="view-history" aria-label="历史记录">
+      <div class="toolbar">
+        <div class="toolbar-l"><span class="toolbar-label">历史记录</span></div>
+        <div class="toolbar-r">
+          <button class="btn btn-g">筛选</button>
+          <button class="btn btn-g">导出</button>
+          <button class="btn btn-g">清空</button>
+        </div>
+      </div>
+      <div class="hist-list">
+        <article class="hist-item" tabindex="0">
+          <div class="hist-h"><span class="hist-time">14:32</span><span class="hist-badge tr">翻译</span></div>
+          <p class="hist-txt">The patient presents with acute onset of dysuria and frequency. Urinalysis shows positive...</p>
+        </article>
+        <article class="hist-item" tabindex="0">
+          <div class="hist-h"><span class="hist-time">14:15</span><span class="hist-badge ocr">OCR</span></div>
+          <p class="hist-txt">Prostate-specific antigen (PSA) levels were elevated at 12.3 ng/mL...</p>
+        </article>
+        <article class="hist-item" tabindex="0">
+          <div class="hist-h"><span class="hist-time">13:58</span><span class="hist-badge ai">AI</span></div>
+          <p class="hist-txt">根据患者的PSA水平和尿常规结果，建议进行前列腺穿刺活检...</p>
+        </article>
+        <article class="hist-item" tabindex="0">
+          <div class="hist-h"><span class="hist-time">13:42</span><span class="hist-badge tr">翻译</span></div>
+          <p class="hist-txt">Benign prostatic hyperplasia (BPH) is a common condition in men over 50...</p>
+        </article>
+        <article class="hist-item" tabindex="0">
+          <div class="hist-h"><span class="hist-time">13:20</span><span class="hist-badge ocr">OCR</span></div>
+          <p class="hist-txt">CT scan reveals a 3.2 cm calculus in the left proximal ureter with mild...</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ========== AI 对话 ========== -->
+    <section class="view" id="view-chat" aria-label="AI 对话">
+      <div class="chat-msgs" id="chat-container">
+        <div class="chat-msg assistant">
+          <div class="chat-avatar asst">AI</div>
+          <div class="chat-bubble asst">你好！我是 WinOCR AI 助手。我可以帮你分析医学文献、翻译病历、解释检查报告。<br><br>你可以直接发送截图中的内容，也可以提出具体问题。</div>
+        </div>
+        <div class="chat-msg user">
+          <div class="chat-avatar user">我</div>
+          <div class="chat-bubble user">帮我解释一下 PSA 12.3 ng/mL 的临床意义</div>
+        </div>
+        <div class="chat-msg assistant">
+          <div class="chat-avatar asst">AI</div>
+          <div class="chat-bubble asst">
+            <strong>PSA 12.3 ng/mL</strong> 高于参考范围（0-4 ng/mL），需进一步鉴别：<br><br>
+            <strong>可能原因：</strong><br>
+            · 前列腺癌 — 需穿刺活检确诊<br>
+            · 良性前列腺增生（BPH）<br>
+            · 前列腺炎<br>
+            · 近期导尿或膀胱镜检查<br><br>
+            <strong>建议指标：</strong><br>
+            · 游离PSA比值（fPSA/tPSA）<br>
+            · 直肠指检（DRE）<br>
+            · 前列腺MRI<br><br>
+            <em>⚠ 以上信息仅供参考，不能替代专业医疗建议。</em>
+          </div>
+        </div>
+      </div>
+      <div class="chat-opt">
+        <label style="display:flex;align-items:center;gap:var(--sp2);cursor:pointer"><input type="checkbox" checked> 带上识别原文</label>
+        <label style="display:flex;align-items:center;gap:var(--sp2);cursor:pointer"><input type="checkbox"> 带上最近截图</label>
+        <span style="flex:1"></span>
+        <span style="font-family:var(--font-m);font-size:11px">Context: 1,247 / 32,768 tokens</span>
+      </div>
+      <div class="chat-input-area">
+        <textarea class="chat-input" id="chat-input" rows="1" placeholder="输入问题... (Enter 发送, Shift+Enter 换行)"></textarea>
+        <button class="chat-send" id="chat-send" title="发送">↑</button>
+      </div>
+    </section>
+
+    <!-- ========== 模型管理 ========== -->
+    <section class="view" id="view-models" aria-label="模型管理">
+      <div class="toolbar">
+        <div class="toolbar-l"><span class="toolbar-label">模型管理</span></div>
+        <div class="toolbar-r">
+          <button class="btn btn-g">导入模型</button>
+          <button class="btn btn-g">刷新</button>
+        </div>
+      </div>
+      <div class="models-list">
+        <div class="model-item">
+          <div class="model-info">
+            <span class="model-name">RapidOCR v6_small</span>
+            <span class="model-path">~/.winocr/models/ocr/v6_small/ <em style="color:var(--ok)">[已下载]</em></span>
+          </div>
+          <div class="model-badge-row"><span class="model-status ok">可用</span><span class="model-size">12.4 MB</span></div>
+        </div>
+        <div class="model-item">
+          <div class="model-info">
+            <span class="model-name">RapidOCR v6_tiny</span>
+            <span class="model-path">~/.winocr/models/ocr/v6_tiny/ <em style="color:var(--ok)">[已下载]</em></span>
+          </div>
+          <div class="model-badge-row"><span class="model-status ok">可用</span><span class="model-size">8.2 MB</span></div>
+        </div>
+        <div class="model-item">
+          <div class="model-info">
+            <span class="model-name">RapidOCR v6_medium</span>
+            <span class="model-path">~/.winocr/models/ocr/v6_medium/ <em style="color:var(--text3)">[未下载]</em></span>
+          </div>
+          <div class="model-badge-row"><span class="model-status warn">缺失</span><span class="model-size">45.8 MB</span><button class="btn btn-g" style="height:24px;font-size:11px">下载</button></div>
+        </div>
+        <div class="model-item">
+          <div class="model-info">
+            <span class="model-name">Argos 翻译包 en-zh</span>
+            <span class="model-path">未找到（在线翻译仍可用）</span>
+          </div>
+          <div class="model-badge-row"><span class="model-status warn">缺失</span><span class="model-size">—</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 插件 ========== -->
+    <section class="view" id="view-plugins" aria-label="插件管理">
+      <div class="toolbar">
+        <div class="toolbar-l"><span class="toolbar-label">插件管理</span></div>
+        <div class="toolbar-r">
+          <button class="btn btn-g">从文件导入</button>
+          <button class="btn btn-g">浏览市场</button>
+        </div>
+      </div>
+      <div class="plugins-list">
+        <div class="plugin-card">
+          <div class="plugin-icon">📷</div>
+          <div class="plugin-name">划词翻译</div>
+          <div class="plugin-desc">在任何应用中选中文字，自动弹出翻译浮层。支持全局热键 Ctrl+D。</div>
+          <div class="plugin-meta"><span>v1.2.0</span><label style="display:flex;align-items:center;gap:var(--sp1)"><input type="checkbox" checked> 已启用</label></div>
+        </div>
+        <div class="plugin-card">
+          <div class="plugin-icon">📄</div>
+          <div class="name">PDF 文档解析</div>
+          <div class="plugin-desc">解析 PDF 文件中的文字和表格，支持扫描件 OCR。自动 Infer reading order。</div>
+          <div class="plugin-meta"><span>v2.0.1</span><label style="display:flex;align-items:center;gap:var(--sp1)"><input type="checkbox" checked> 已启用</label></div>
+        </div>
+        <div class="plugin-card">
+          <div class="plugin-icon">🎬</div>
+          <div class="name">视频 OCR</div>
+          <div class="plugin-desc">从视频中提取字幕文字，支持时间戳定位。配合 Whisper 语音转文字。</div>
+          <div class="plugin-meta"><span>v0.9.3</span><label style="display:flex;align-items:center;gap:var(--sp1)"><input type="checkbox" checked> 已启用</label></div>
+        </div>
+        <div class="plugin-card">
+          <div class="plugin-icon">📊</div>
+          <div class="name">表格识别增强</div>
+          <div class="plugin-desc">结构化表格识别与重建，自动构建 Markdown 表格，支持合并单元格。</div>
+          <div class="plugin-meta"><span>v1.1.0</span><label style="display:flex;align-items:center;gap:var(--sp1)"><input type="checkbox"> 已禁用</label></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 设置 ========== -->
+    <section class="view settings-view" id="view-settings" aria-label="设置">
+      <div class="settings-c">
+
+        <!-- OCR 引擎 -->
+        <h3 class="set-title">OCR 引擎</h3>
+        <div class="set-section">
+          <div class="set-sh">识别引擎</div>
+          <div class="set-sb">
+            <div class="set-row"><span class="set-lbl">引擎选择</span><select class="set-select"><option>RapidOCR（本地）</option><option>云端视觉 OCR</option></select></div>
+            <div class="set-row"><span class="set-lbl">模型档位</span><select class="set-select"><option>tiny（最快）</option><option selected>small（推荐）</option><option>medium（最准）</option></select></div>
+            <div class="set-row"><span class="set-lbl">图像预处理</span><div class="toggle on" role="switch" aria-checked="true" tabindex="0"></div></div>
+            <div class="set-row"><span class="set-lbl">结构化输出</span><div class="toggle" role="switch" aria-checked="false" tabindex="0"></div></div>
+          </div>
+        </div>
+
+        <!-- 翻译引擎 -->
+        <h3 class="set-title">翻译引擎</h3>
+        <div class="set-section">
+          <div class="set-sh">翻译引擎</div>
+          <div class="set-sb">
+            <div class="set-row"><span class="set-lbl">首选引擎</span><select class="set-select"><option>DeepSeek-R1（推荐）</option><option>Argos 离线</option><option>百度翻译</option></select></div>
+            <div class="set-row"><span class="set-lbl">自动翻译</span><div class="toggle on" role="switch" aria-checked="true" tabindex="0"></div></div>
+            <div class="set-row"><span class="set-lbl">保留原文格式</span><div class="toggle" role="switch" aria-checked="false" tabindex="0"></div></div>
+            <div class="set-row"><span class="set-lbl">大模型 Base URL</span><div class="combo-input"><input class="input" placeholder="https://api.deepseek.com" style="flex:1"><button class="btn btn-g">测试</button></div></div>
+            <div class="set-row"><span class="set-lbl">API Key</span><div class="combo-input"><input class="input" placeholder="sk-..." type="password" style="flex:1"><button class="btn btn-g">显示</button></div></div>
+          </div>
+        </div>
+
+        <!-- AI 对话 -->
+        <h3 class="set-title">AI 对话</h3>
+        <div class="set-section">
+          <div class="set-sh">大模型配置</div>
+          <div class="set-sb">
+            <div class="set-row"><span class="set-lbl">文本模型</span><input class="input" value="deepseek-reasoner" style="min-width:200px"></div>
+            <div class="set-row"><span class="set-lbl">视觉模型</span><input class="input" value="glm-4.1v-9b-thinking" style="min-width:200px"></div>
+            <div class="set-row"><span class="set-lbl">Temperature</span><input class="input" value="0.7" type="number" step="0.1" style="min-width:80px"></div>
+            <div class="set-row"><span class="set-lbl">最大上下文</span><select class="set-select"><option>32,768 tokens</option><option>8,192 tokens</option></select></div>
+            <div class="set-row"><span class="set-lbl">历史轮数</span><input class="input" value="12" type="number" style="min-width:80px"></div>
+          </div>
+        </div>
+
+        <!-- 界面 -->
+        <h3 class="set-title">界面</h3>
+        <div class="set-section">
+          <div class="set-sh">外观</div>
+          <div class="set-sb">
+            <div class="set-row"><span class="set-lbl">主题</span><select class="set-select"><option>深色（推荐）</option><option>浅色</option><option>跟随系统</option></select></div>
+            <div class="set-row"><span class="set-lbl">字号</span><select class="set-select"><option>小</option><option selected>中</option><option>大</option></select></div>
+            <div class="set-row"><span class="set-lbl">字体族</span><select class="set-select"><option>IBM Plex Sans</option><option>Noto Sans SC</option><option>系统等宽</option></select></div>
+          </div>
+        </div>
+
+        <!-- 快捷键 -->
+        <h3 class="set-title">快捷键</h3>
+        <div class="set-section">
+          <div class="set-sh">全局热键</div>
+          <div class="set-sb">
+            <div class="set-row"><span class="set-lbl">截图识别</span><kbd class="set-val" style="padding:3px 8px;background:var(--surface3);border-radius:var(--r1);border:1px solid var(--border)">Ctrl + Space</kbd></div>
+            <div class="set-row"><span class="set-lbl">划词翻译</span><kbd class="set-val" style="padding:3px 8px;background:var(--surface3);border-radius:var(--r1);border:1px solid var(--border)">Ctrl + D</kbd></div>
+            <div class="set-row"><span class="set-lbl">唤醒窗口</span><kbd class="set-val" style="padding:3px 8px;background:var(--surface3);border-radius:var(--r1);border:1px solid var(--border)">Ctrl + Shift + W</kbd></div>
+          </div>
+        </div>
+
+        <!-- 关于 -->
+        <h3 class="set-title">关于</h3>
+        <div class="set-section">
+          <div class="set-sh">WinOCR</div>
+          <div class="set-sb">
+            <div class="set-row"><span class="set-lbl">版本</span><span class="set-val">3.4.18-beta</span></div>
+            <div class="set-row"><span class="set-lbl">检查更新</span><a class="link-btn" href="#">立即检查 →</a></div>
+            <div class="set-row"><span class="set-lbl">开源许可</span><span class="set-val">MIT License</span></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- 状态栏 -->
+<footer class="sbar">
+  <div class="sbar-l">
+    <div class="sbar-item"><span class="sdot rdy"></span><span>就绪</span></div>
+    <div class="sbar-item"><span>OCR: RapidOCR small</span></div>
+    <div class="sbar-item"><span>翻译: DeepSeek-R1</span></div>
+  </div>
+  <div class="sbar-r">
+    <div class="sbar-item"><span>字符: 0</span></div>
+    <div class="sbar-item"><span>耗时: —</span></div>
+  </div>
+</footer>
+
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $$ = s => document.querySelectorAll(s);
+  const $ = s => document.querySelector(s);
+
+  // ===== 视图切换 =====
+  $$('.nav-btn[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.view;
+      $$('.nav-btn[data-view]').forEach(b => b.classList.toggle('active', b === btn));
+      $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + id));
+    });
+  });
+
+  // ===== 开关 toggle =====
+  $$('.toggle').forEach(t => {
+    t.addEventListener('click', () => {
+      t.classList.toggle('on');
+      t.setAttribute('aria-checked', t.classList.contains('on'));
+    });
+  });
+
+  // ===== AI Chat =====
+  const chatInput = $('#chat-input');
+  const chatSend = $('#chat-send');
+  const chatBox = $('#chat-container');
+
+  function appendMsg(role, text) {
+    const cls = role === 'user' ? 'user' : 'assistant';
+    const av = role === 'user' ? '我' : 'AI';
+    const d = document.createElement('div');
+    d.className = 'chat-msg ' + cls;
+    d.innerHTML = '<div class="chat-avatar ' + (role==='user'?'user':'asst') + '">' + av + '</div><div class="chat-bubble ' + (role==='user'?'user':'asst') + '">' + text + '</div>';
+    chatBox.appendChild(d);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  chatSend.addEventListener('click', () => {
+    const t = chatInput.value.trim();
+    if (!t) return;
+    appendMsg('user', t.replace(/\n/g, '<br>'));
+    chatInput.value = ''; chatInput.style.height = 'auto';
+    setTimeout(() => appendMsg('assistant', '我已收到你的问题，正在分析中...'), 400);
+  });
+
+  chatInput.addEventListener('input', () => {
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+  });
+  chatInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSend.click(); }
+  });
+
+  // ===== 截图按钮演示 =====
+  $('#btn-screenshot-demo').addEventListener('click', () => {
+    alert('截图功能演示请见 capture-demo.html — 完整截图交互流程演示');
+  });
+})();
+</script>
+</body>
+</html>

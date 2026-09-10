@@ -4,6 +4,7 @@
 从 dialogs.py 拆分而来；热键设置（dialogs_hotkey）与连接测试
 （dialogs_test）已各自独立成模块。
 """
+
 from __future__ import annotations
 
 import tkinter as tk
@@ -17,12 +18,13 @@ from .dialogs_test import _test_ai, _test_translate, _test_ocr
 # ---------------- 连接参数编辑辅助（模块级，供 open_api_settings 复用） ----------------
 def _lim_row(parent, r, label, var, note=""):
     ttk.Label(parent, text=label).grid(row=r, column=0, sticky=tk.W, pady=(4, 0))
-    ttk.Entry(parent, textvariable=var, width=8).grid(row=r, column=1,
-                                                      sticky=tk.W, padx=(6, 0))
+    ttk.Entry(parent, textvariable=var, width=8).grid(
+        row=r, column=1, sticky=tk.W, padx=(6, 0)
+    )
     if note:
-        ttk.Label(parent, text=note, foreground=theme.TEXT_MUTED,
-                  font=theme.UI_FONT_SMALL).grid(row=r, column=2, sticky=tk.W,
-                                                 padx=(10, 0))
+        ttk.Label(
+            parent, text=note, foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL
+        ).grid(row=r, column=2, sticky=tk.W, padx=(10, 0))
 
 
 def _make_conn_editor(parent, obj, *, vision: bool = True) -> dict:
@@ -45,67 +47,98 @@ def _make_conn_editor(parent, obj, *, vision: bool = True) -> dict:
         "retry_attempts": tk.StringVar(value=str(obj.retry_attempts)),
         "retry_backoff": tk.StringVar(value=str(obj.retry_backoff)),
     }
-    ttk.Label(parent, text="Base URL（留空 = 平台官方默认）"
-              ).grid(row=0, column=0, columnspan=4, sticky=tk.W)
-    ttk.Entry(parent, textvariable=v["base_url"], width=52
-              ).grid(row=1, column=0, columnspan=4, sticky=tk.W, pady=(2, 0))
-    ttk.Label(parent, text="例：https://open.bigmodel.cn/api/paas/v4/chat/completions\n"
-                           "    https://api.siliconflow.cn/v1/chat/completions",
-              foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL, justify=tk.LEFT
-              ).grid(row=2, column=0, columnspan=4, sticky=tk.W, pady=(2, 0))
+    ttk.Label(parent, text="Base URL（留空 = 平台官方默认）").grid(
+        row=0, column=0, columnspan=4, sticky=tk.W
+    )
+    ttk.Entry(parent, textvariable=v["base_url"], width=52).grid(
+        row=1, column=0, columnspan=4, sticky=tk.W, pady=(2, 0)
+    )
+    ttk.Label(
+        parent,
+        text="例：https://open.bigmodel.cn/api/paas/v4/chat/completions\n"
+        "    https://api.siliconflow.cn/v1/chat/completions",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+        justify=tk.LEFT,
+    ).grid(row=2, column=0, columnspan=4, sticky=tk.W, pady=(2, 0))
 
     ttk.Label(parent, text="API Key").grid(row=3, column=0, sticky=tk.W, pady=(8, 0))
     e_key = ttk.Entry(parent, textvariable=v["api_key"], width=42, show="•")
     e_key.grid(row=4, column=0, columnspan=2, sticky=tk.W)
     show_key = tk.BooleanVar(value=False)
-    ttk.Checkbutton(parent, text="显示", variable=show_key,
-                    command=lambda: e_key.config(show="" if show_key.get() else "•")
-                    ).grid(row=4, column=2, sticky=tk.W, padx=(6, 0))
+    ttk.Checkbutton(
+        parent,
+        text="显示",
+        variable=show_key,
+        command=lambda: e_key.config(show="" if show_key.get() else "•"),
+    ).grid(row=4, column=2, sticky=tk.W, padx=(6, 0))
 
-    ttk.Label(parent, text="文本模型（AI 对话 / 大模型翻译用）"
-              ).grid(row=5, column=0, sticky=tk.W, pady=(8, 0))
-    ttk.Entry(parent, textvariable=v["text_model"], width=30
-              ).grid(row=6, column=0, sticky=tk.W)
-    ttk.Label(parent, text="例：glm-4-flash / Qwen/Qwen2.5-Coder-7B-Instruct",
-              foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL
-              ).grid(row=6, column=1, columnspan=3, sticky=tk.W, padx=(8, 0))
+    ttk.Label(parent, text="文本模型（AI 对话 / 大模型翻译用）").grid(
+        row=5, column=0, sticky=tk.W, pady=(8, 0)
+    )
+    ttk.Entry(parent, textvariable=v["text_model"], width=30).grid(
+        row=6, column=0, sticky=tk.W
+    )
+    ttk.Label(
+        parent,
+        text="例：glm-4-flash / Qwen/Qwen2.5-Coder-7B-Instruct",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+    ).grid(row=6, column=1, columnspan=3, sticky=tk.W, padx=(8, 0))
 
-    ttk.Label(parent, text="视觉模型（AI 带图对话 / 云端 OCR 用，留空跟随文本模型）"
-              ).grid(row=7, column=0, sticky=tk.W, pady=(8, 0))
-    ttk.Entry(parent, textvariable=v["vision_model"], width=30
-              ).grid(row=8, column=0, sticky=tk.W)
-    ttk.Label(parent, text="例：glm-4v-flash / GLM-4.1V-9B-Thinking",
-              foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL
-              ).grid(row=8, column=1, columnspan=3, sticky=tk.W, padx=(8, 0))
+    ttk.Label(
+        parent, text="视觉模型（AI 带图对话 / 云端 OCR 用，留空跟随文本模型）"
+    ).grid(row=7, column=0, sticky=tk.W, pady=(8, 0))
+    ttk.Entry(parent, textvariable=v["vision_model"], width=30).grid(
+        row=8, column=0, sticky=tk.W
+    )
+    ttk.Label(
+        parent,
+        text="例：glm-4v-flash / GLM-4.1V-9B-Thinking",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+    ).grid(row=8, column=1, columnspan=3, sticky=tk.W, padx=(8, 0))
 
     lf_samp = ttk.LabelFrame(parent, text="采样参数", padding=8)
     lf_samp.grid(row=9, column=0, columnspan=4, sticky=tk.EW, pady=(10, 0))
     ttk.Label(lf_samp, text="Temperature").grid(row=0, column=0, sticky=tk.W)
-    ttk.Entry(lf_samp, textvariable=v["temperature"], width=8
-              ).grid(row=0, column=1, sticky=tk.W, padx=(6, 16))
+    ttk.Entry(lf_samp, textvariable=v["temperature"], width=8).grid(
+        row=0, column=1, sticky=tk.W, padx=(6, 16)
+    )
     ttk.Label(lf_samp, text="Top P").grid(row=0, column=2, sticky=tk.W)
-    ttk.Entry(lf_samp, textvariable=v["top_p"], width=8
-              ).grid(row=0, column=3, sticky=tk.W, padx=(6, 0))
+    ttk.Entry(lf_samp, textvariable=v["top_p"], width=8).grid(
+        row=0, column=3, sticky=tk.W, padx=(6, 0)
+    )
     if vision:
-        ttk.Label(lf_samp, text="视觉 Temp（<0 不发送）").grid(row=1, column=0, sticky=tk.W)
+        ttk.Label(lf_samp, text="视觉 Temp（<0 不发送）").grid(
+            row=1, column=0, sticky=tk.W
+        )
         v["vision_temperature"] = tk.StringVar(value=str(obj.vision_temperature))
-        ttk.Entry(lf_samp, textvariable=v["vision_temperature"], width=8
-                  ).grid(row=1, column=1, sticky=tk.W, padx=(6, 16))
-        ttk.Label(lf_samp, text="视觉 Top P（<0 不发送）").grid(row=1, column=2, sticky=tk.W)
+        ttk.Entry(lf_samp, textvariable=v["vision_temperature"], width=8).grid(
+            row=1, column=1, sticky=tk.W, padx=(6, 16)
+        )
+        ttk.Label(lf_samp, text="视觉 Top P（<0 不发送）").grid(
+            row=1, column=2, sticky=tk.W
+        )
         v["vision_top_p"] = tk.StringVar(value=str(obj.vision_top_p))
-        ttk.Entry(lf_samp, textvariable=v["vision_top_p"], width=8
-                  ).grid(row=1, column=3, sticky=tk.W, padx=(6, 0))
-        ttk.Label(lf_samp, text="视觉最大输出 (token)").grid(row=2, column=0,
-                                                            sticky=tk.W, pady=(6, 0))
+        ttk.Entry(lf_samp, textvariable=v["vision_top_p"], width=8).grid(
+            row=1, column=3, sticky=tk.W, padx=(6, 0)
+        )
+        ttk.Label(lf_samp, text="视觉最大输出 (token)").grid(
+            row=2, column=0, sticky=tk.W, pady=(6, 0)
+        )
         v["vision_max_output_tokens"] = tk.StringVar(
-            value=str(obj.vision_max_output_tokens))
-        ttk.Entry(lf_samp, textvariable=v["vision_max_output_tokens"], width=8
-                  ).grid(row=2, column=1, sticky=tk.W, padx=(6, 16))
+            value=str(obj.vision_max_output_tokens)
+        )
+        ttk.Entry(lf_samp, textvariable=v["vision_max_output_tokens"], width=8).grid(
+            row=2, column=1, sticky=tk.W, padx=(6, 16)
+        )
 
     lf_lim = ttk.LabelFrame(parent, text="限流 / 上下文保护", padding=8)
     lf_lim.grid(row=10, column=0, columnspan=4, sticky=tk.EW, pady=(8, 0))
-    _lim_row(lf_lim, 0, "上下文窗口上限 (token)", v["max_context_tokens"],
-             "超长自动裁剪历史")
+    _lim_row(
+        lf_lim, 0, "上下文窗口上限 (token)", v["max_context_tokens"], "超长自动裁剪历史"
+    )
     _lim_row(lf_lim, 1, "每轮最大输出 (token)", v["max_output_tokens"])
     _lim_row(lf_lim, 2, "最大对话轮次", v["max_turns"], "超出只保留最近 N 轮")
     _lim_row(lf_lim, 3, "请求超时 (秒)", v["timeout"])
@@ -146,7 +179,7 @@ def open_api_settings(window) -> None:
     cfg = app.config
 
     win = _modal(root, "API 与引擎设置", "680x660")
-    win.resizable(True, True)          # 窗口可拉大；内容超一屏时用页内滚动条
+    win.resizable(True, True)  # 窗口可拉大；内容超一屏时用页内滚动条
     win.minsize(560, 400)
 
     # 设置内搜索（P2-1）：输入关键词，自动跳到第一个匹配页签并提示命中数
@@ -154,8 +187,9 @@ def open_api_settings(window) -> None:
     search_row.pack(fill=tk.X)
     ttk.Label(search_row, text="搜索设置：").pack(side=tk.LEFT)
     search_var = tk.StringVar()
-    ttk.Entry(search_row, textvariable=search_var, width=28
-              ).pack(side=tk.LEFT, padx=(0, 6))
+    ttk.Entry(search_row, textvariable=search_var, width=28).pack(
+        side=tk.LEFT, padx=(0, 6)
+    )
     search_hint = ttk.Label(search_row, text="", foreground=theme.TEXT_MUTED)
     search_hint.pack(side=tk.LEFT)
 
@@ -167,10 +201,15 @@ def open_api_settings(window) -> None:
     # ================= 页签 1：AI 对话 =================
     p_ai = _ScrollableFrame(nb)
     nb.add(p_ai, text="AI 对话")
-    ttk.Label(p_ai.body, text="本功能直接持有自己的连接参数（地址 / 密钥 / 模型 / 采样 / 限流），"
-              "不引用其它功能。文本对话用「文本模型」，带图对话用「视觉模型」。",
-              foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL, wraplength=520,
-              justify=tk.LEFT).grid(row=0, column=0, columnspan=4, sticky=tk.W, pady=(0, 8))
+    ttk.Label(
+        p_ai.body,
+        text="本功能直接持有自己的连接参数（地址 / 密钥 / 模型 / 采样 / 限流），"
+        "不引用其它功能。文本对话用「文本模型」，带图对话用「视觉模型」。",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+        wraplength=520,
+        justify=tk.LEFT,
+    ).grid(row=0, column=0, columnspan=4, sticky=tk.W, pady=(0, 8))
     ai_body = ttk.Frame(p_ai.body)
     ai_body.grid(row=1, column=0, columnspan=4, sticky=tk.EW)
 
@@ -180,27 +219,53 @@ def open_api_settings(window) -> None:
         "glm": "智谱 GLM（文本 + 视觉）",
         "openai_compat": "OpenAI 兼容（SiliconFlow / DeepSeek / vLLM 等）",
     }
-    provider = tk.StringVar(value=cfg.ai.provider
-                            if cfg.ai.provider in _AI_PROVIDERS else "glm")
-    ttk.Combobox(p_ai.body, textvariable=provider, state="readonly", width=40,
-                 values=[f"{k} — {v}" for k, v in _AI_PROVIDERS.items()]
-                 ).grid(row=3, column=0, columnspan=4, sticky=tk.W, pady=(2, 0))
+    provider = tk.StringVar(
+        value=cfg.ai.provider if cfg.ai.provider in _AI_PROVIDERS else "glm"
+    )
+    ttk.Combobox(
+        p_ai.body,
+        textvariable=provider,
+        state="readonly",
+        width=40,
+        values=[f"{k} — {v}" for k, v in _AI_PROVIDERS.items()],
+    ).grid(row=3, column=0, columnspan=4, sticky=tk.W, pady=(2, 0))
 
     ai_v = _make_conn_editor(ai_body, cfg.ai, vision=True)
 
-    ai_test_lbl = ttk.Label(p_ai.body, text="", foreground=theme.TEXT_MUTED, wraplength=520,
-                            justify=tk.LEFT)
+    ai_test_lbl = ttk.Label(
+        p_ai.body, text="", foreground=theme.TEXT_MUTED, wraplength=520, justify=tk.LEFT
+    )
     ai_test_lbl.grid(row=4, column=0, columnspan=4, sticky=tk.W, pady=(6, 0))
-    ttk.Button(p_ai.body, text="测试文本对话", command=lambda: _test_ai(
-        app, ai_v["api_key"].get(), ai_v["base_url"].get(),
-        ai_v["text_model"].get(), ai_v["vision_model"].get(),
-        ai_v["base_url"].get(), ai_v["api_key"].get(), "text", ai_test_lbl)
-               ).grid(row=5, column=0, sticky=tk.W, pady=(4, 0))
-    ttk.Button(p_ai.body, text="测试带图对话", command=lambda: _test_ai(
-        app, ai_v["api_key"].get(), ai_v["base_url"].get(),
-        ai_v["text_model"].get(), ai_v["vision_model"].get(),
-        ai_v["base_url"].get(), ai_v["api_key"].get(), "vision", ai_test_lbl)
-               ).grid(row=5, column=1, sticky=tk.W, pady=(4, 0))
+    ttk.Button(
+        p_ai.body,
+        text="测试文本对话",
+        command=lambda: _test_ai(
+            app,
+            ai_v["api_key"].get(),
+            ai_v["base_url"].get(),
+            ai_v["text_model"].get(),
+            ai_v["vision_model"].get(),
+            ai_v["base_url"].get(),
+            ai_v["api_key"].get(),
+            "text",
+            ai_test_lbl,
+        ),
+    ).grid(row=5, column=0, sticky=tk.W, pady=(4, 0))
+    ttk.Button(
+        p_ai.body,
+        text="测试带图对话",
+        command=lambda: _test_ai(
+            app,
+            ai_v["api_key"].get(),
+            ai_v["base_url"].get(),
+            ai_v["text_model"].get(),
+            ai_v["vision_model"].get(),
+            ai_v["base_url"].get(),
+            ai_v["api_key"].get(),
+            "vision",
+            ai_test_lbl,
+        ),
+    ).grid(row=5, column=1, sticky=tk.W, pady=(4, 0))
 
     # ================= 页签 2：大模型翻译 =================
     p2 = _ScrollableFrame(nb)
@@ -216,56 +281,136 @@ def open_api_settings(window) -> None:
 
     ttk.Label(p2.body, text="翻译引擎").grid(row=0, column=0, sticky=tk.W)
     eng = tk.StringVar(value=labels.get(cfg.translate.engine, cfg.translate.engine))
-    ttk.Combobox(p2.body, textvariable=eng, state="readonly", width=38,
-                 values=[labels[n] for n in engines]).grid(row=1, column=0,
-                                                           sticky=tk.W, pady=(2, 10))
+    ttk.Combobox(
+        p2.body,
+        textvariable=eng,
+        state="readonly",
+        width=38,
+        values=[labels[n] for n in engines],
+    ).grid(row=1, column=0, sticky=tk.W, pady=(2, 0))
+
+    # ---- 本地模型选择（llama_cpp 引擎专用）----
+    from ...core.paths import llama_model_search_dirs
+
+    llama_models = []
+    for d in llama_model_search_dirs():
+        if d.exists():
+            llama_models.extend(sorted([f.name for f in d.glob("*.gguf")]))
+    llama_models = sorted(set(llama_models))
+
+    llama_frame = ttk.Frame(p2.body)
+    ttk.Label(llama_frame, text="本地模型").pack(side=tk.LEFT)
+    llama_model_var = tk.StringVar(
+        value=cfg.translate.text_model or (llama_models[0] if llama_models else "")
+    )
+    model_combo = ttk.Combobox(
+        llama_frame,
+        textvariable=llama_model_var,
+        state="readonly",
+        width=30,
+        values=llama_models,
+    )
+    model_combo.pack(side=tk.LEFT, padx=(6, 0))
+
+    def _sync_llama_ui(*_):
+        eng_name = eng.get().split(" — ")[0].strip()
+        if eng_name == "llama_cpp":
+            llama_frame.grid(row=2, column=0, sticky=tk.W, pady=(2, 10))
+            if llama_models and llama_model_var.get() not in llama_models:
+                llama_model_var.set(llama_models[0])
+        else:
+            llama_frame.grid_remove()
+
+    eng.trace_add("write", _sync_llama_ui)
+    _sync_llama_ui()  # 初始同步
 
     from ...core.types import Lang
+
     lang_codes = [l.value for l in Lang]
-    ttk.Label(p2.body, text="默认译向").grid(row=2, column=0, sticky=tk.W)
-    tgt = tk.StringVar(value=f"{cfg.translate.target} — {Lang.label(cfg.translate.target)}")
-    ttk.Combobox(p2.body, textvariable=tgt, state="readonly", width=38,
-                 values=[f"{c} — {Lang.label(c)}" for c in lang_codes]
-                 ).grid(row=3, column=0, sticky=tk.W, pady=(2, 10))
+    ttk.Label(p2.body, text="默认译向").grid(row=3, column=0, sticky=tk.W)
+    tgt = tk.StringVar(
+        value=f"{cfg.translate.target} — {Lang.label(cfg.translate.target)}"
+    )
+    ttk.Combobox(
+        p2.body,
+        textvariable=tgt,
+        state="readonly",
+        width=38,
+        values=[f"{c} — {Lang.label(c)}" for c in lang_codes],
+    ).grid(row=4, column=0, sticky=tk.W, pady=(2, 10))
 
     auto_t = tk.BooleanVar(value=cfg.translate.auto_translate)
-    ttk.Checkbutton(p2.body, text="识别完成后自动翻译", variable=auto_t
-                    ).grid(row=4, column=0, sticky=tk.W)
+    ttk.Checkbutton(p2.body, text="识别完成后自动翻译", variable=auto_t).grid(
+        row=5, column=0, sticky=tk.W
+    )
 
     offline = tk.BooleanVar(value=cfg.translate.offline_mode)
-    ttk.Checkbutton(p2.body, text="离线护栏（离线模式下只走本地引擎，不发起网络请求）",
-                    variable=offline).grid(row=5, column=0, sticky=tk.W)
+    ttk.Checkbutton(
+        p2.body,
+        text="离线护栏（离线模式下只走本地引擎，不发起网络请求）",
+        variable=offline,
+    ).grid(row=6, column=0, sticky=tk.W)
 
-    ttk.Label(p2.body, text="回退顺序（auto 模式下从左到右依次尝试）",
-              foreground=theme.TEXT_MUTED).grid(row=6, column=0, sticky=tk.W, pady=(14, 2))
+    ttk.Label(
+        p2.body,
+        text="回退顺序（auto 模式下从左到右依次尝试）",
+        foreground=theme.TEXT_MUTED,
+    ).grid(row=7, column=0, sticky=tk.W, pady=(14, 2))
     order = tk.StringVar(value=", ".join(cfg.translate.fallback_order))
-    ttk.Entry(p2.body, textvariable=order, width=42).grid(row=7, column=0, sticky=tk.W)
-    ttk.Label(p2.body, text=f"可用引擎：{', '.join(disp.available_engines()) if disp else '无'}",
-              foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL
-              ).grid(row=8, column=0, sticky=tk.W, pady=(6, 0))
+    ttk.Entry(p2.body, textvariable=order, width=42).grid(row=8, column=0, sticky=tk.W)
+    ttk.Label(
+        p2.body,
+        text=f"可用引擎：{', '.join(disp.available_engines()) if disp else '无'}",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+    ).grid(row=9, column=0, sticky=tk.W, pady=(6, 0))
 
-    ttk.Separator(p2.body, orient=tk.HORIZONTAL).grid(row=9, column=0, sticky=tk.EW, pady=12)
-    ttk.Label(p2.body, text="本功能直接用自己的一套连接参数（glm / SiliconFlow / 自建均可），"
-                       "不再引用「平台账号」页。",
-              foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL, wraplength=520,
-              justify=tk.LEFT).grid(row=10, column=0, columnspan=4, sticky=tk.W,
-                                   pady=(0, 6))
+    ttk.Separator(p2.body, orient=tk.HORIZONTAL).grid(
+        row=10, column=0, sticky=tk.EW, pady=12
+    )
+    ttk.Label(
+        p2.body,
+        text="本功能直接用自己的一套连接参数（glm / SiliconFlow / 自建均可），"
+        "不再引用「平台账号」页。",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+        wraplength=520,
+        justify=tk.LEFT,
+    ).grid(row=11, column=0, columnspan=4, sticky=tk.W, pady=(0, 6))
     tr_body = ttk.Frame(p2.body)
-    tr_body.grid(row=11, column=0, columnspan=4, sticky=tk.EW)
+    tr_body.grid(row=12, column=0, columnspan=4, sticky=tk.EW)
     tr_v = _make_conn_editor(tr_body, cfg.translate, vision=False)
 
-    trans_test_lbl = ttk.Label(p2.body, text="", foreground=theme.TEXT_MUTED,
-                               font=theme.UI_FONT_SMALL, wraplength=500, justify=tk.LEFT)
-    trans_test_lbl.grid(row=12, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
-    ttk.Button(p2.body, text="测试翻译连接",
-               command=lambda: _test_translate(
-                   app, tr_v["base_url"].get(), tr_v["text_model"].get(),
-                   tr_v["api_key"].get(), trans_test_lbl)
-               ).grid(row=13, column=0, sticky=tk.W, pady=(6, 0))
+    trans_test_lbl = ttk.Label(
+        p2.body,
+        text="",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+        wraplength=500,
+        justify=tk.LEFT,
+    )
+    trans_test_lbl.grid(row=13, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
+    ttk.Button(
+        p2.body,
+        text="测试翻译连接",
+        command=lambda: _test_translate(
+            app,
+            tr_v["base_url"].get(),
+            tr_v["text_model"].get(),
+            tr_v["api_key"].get(),
+            trans_test_lbl,
+        ),
+    ).grid(row=14, column=0, sticky=tk.W, pady=(6, 0))
 
-    eff_lbl = ttk.Label(p2.body, text="", foreground=theme.TEXT_MUTED,
-                        font=theme.UI_FONT_SMALL, wraplength=500, justify=tk.LEFT)
-    eff_lbl.grid(row=14, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
+    eff_lbl = ttk.Label(
+        p2.body,
+        text="",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+        wraplength=500,
+        justify=tk.LEFT,
+    )
+    eff_lbl.grid(row=15, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
 
     # ================= 页签 3：云端 OCR =================
     p3 = _ScrollableFrame(nb)
@@ -274,38 +419,58 @@ def open_api_settings(window) -> None:
     o = cfg.ocr
     ttk.Label(p3.body, text="OCR 引擎").grid(row=0, column=0, sticky=tk.W)
     ocr_eng = tk.StringVar(value=o.engine)
-    ttk.Combobox(p3.body, textvariable=ocr_eng, state="readonly", width=38,
-                 values=["rapidocr", "vision_ocr"]).grid(row=1, column=0,
-                                                          sticky=tk.W, pady=(2, 10))
+    ttk.Combobox(
+        p3.body,
+        textvariable=ocr_eng,
+        state="readonly",
+        width=38,
+        values=["rapidocr", "vision_ocr"],
+    ).grid(row=1, column=0, sticky=tk.W, pady=(2, 10))
 
-    ttk.Label(p3.body, text="本地 RapidOCR 设置",
-              font=theme.UI_FONT_BOLD).grid(row=2, column=0, sticky=tk.W, pady=(4, 2))
-    ttk.Label(p3.body, text="模型档位（越大越准也越慢）").grid(row=3, column=0, sticky=tk.W)
+    ttk.Label(p3.body, text="本地 RapidOCR 设置", font=theme.UI_FONT_BOLD).grid(
+        row=2, column=0, sticky=tk.W, pady=(4, 2)
+    )
+    ttk.Label(p3.body, text="模型档位（越大越准也越慢）").grid(
+        row=3, column=0, sticky=tk.W
+    )
     mt = tk.StringVar(value=o.model_type)
-    ttk.Combobox(p3.body, textvariable=mt, state="readonly", width=18,
-                 values=["tiny", "small", "medium"]).grid(row=4, column=0,
-                                                          sticky=tk.W, pady=(2, 6))
+    ttk.Combobox(
+        p3.body,
+        textvariable=mt,
+        state="readonly",
+        width=18,
+        values=["tiny", "small", "medium"],
+    ).grid(row=4, column=0, sticky=tk.W, pady=(2, 6))
     pre = tk.BooleanVar(value=o.preprocess)
-    ttk.Checkbutton(p3.body, text="智能预处理（小图放大 / 增强对比，代码截图自动保留原色）",
-                    variable=pre).grid(row=5, column=0, sticky=tk.W)
+    ttk.Checkbutton(
+        p3.body,
+        text="智能预处理（小图放大 / 增强对比，代码截图自动保留原色）",
+        variable=pre,
+    ).grid(row=5, column=0, sticky=tk.W)
     struct = tk.BooleanVar(value=o.structured)
-    ttk.Checkbutton(p3.body, text="结构化输出（表格 / 版式结构化结果，供二次处理）",
-                    variable=struct).grid(row=6, column=0, sticky=tk.W)
+    ttk.Checkbutton(
+        p3.body, text="结构化输出（表格 / 版式结构化结果，供二次处理）", variable=struct
+    ).grid(row=6, column=0, sticky=tk.W)
     # 段落 / 行判定模式：A / B / A+B（三选一，供对比测试；不绑快捷键）
-    ttk.Label(p3.body, text="段落 / 行判定模式",
-              font=theme.UI_FONT_BOLD).grid(row=7, column=0, sticky=tk.W, pady=(8, 2))
+    ttk.Label(p3.body, text="段落 / 行判定模式", font=theme.UI_FONT_BOLD).grid(
+        row=7, column=0, sticky=tk.W, pady=(8, 2)
+    )
     para_mode = tk.StringVar(value=getattr(o, "paragraph_mode", "A+B"))
     _pm_row = ttk.Frame(p3.body)
     _pm_row.grid(row=8, column=0, sticky=tk.W, pady=(0, 6))
-    for _val, _lab in (("A", "A  仅行分组"),
-                       ("B", "B  仅几何段落"),
-                       ("A+B", "A+B  行分组+段落（推荐）")):
-        ttk.Radiobutton(_pm_row, text=_lab, variable=para_mode, value=_val
-                        ).pack(side=tk.LEFT, padx=(0, 14))
+    for _val, _lab in (
+        ("A", "A  仅行分组"),
+        ("B", "B  仅几何段落"),
+        ("A+B", "A+B  行分组+段落（推荐）"),
+    ):
+        ttk.Radiobutton(_pm_row, text=_lab, variable=para_mode, value=_val).pack(
+            side=tk.LEFT, padx=(0, 14)
+        )
 
     # 各档位模型安装状态：未安装的档位标注出来，避免误以为用了该档
-    tier_state = ttk.Label(p3.body, text="", foreground=theme.TEXT_MUTED,
-                           font=theme.UI_FONT_SMALL)
+    tier_state = ttk.Label(
+        p3.body, text="", foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL
+    )
     tier_state.grid(row=9, column=0, sticky=tk.W, pady=(0, 4))
     _ocr_svc = app.services.get("ocr")
     if _ocr_svc is not None and hasattr(_ocr_svc, "model_availability"):
@@ -316,28 +481,53 @@ def open_api_settings(window) -> None:
         except Exception:
             pass
 
-    ttk.Separator(p3.body, orient=tk.HORIZONTAL).grid(row=11, column=0, sticky=tk.EW, pady=12)
-    ttk.Label(p3.body, text="云端视觉 OCR（OpenAI 兼容视觉模型；留空地址/密钥 = 关闭，仅本地识别）",
-              font=theme.UI_FONT_BOLD).grid(row=12, column=0, columnspan=4,
-                                           sticky=tk.W, pady=(2, 4))
-    ttk.Label(p3.body, text="本功能直接用自己的一套连接参数，不再引用「平台账号」页。",
-              foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL
-              ).grid(row=13, column=0, columnspan=4, sticky=tk.W)
+    ttk.Separator(p3.body, orient=tk.HORIZONTAL).grid(
+        row=11, column=0, sticky=tk.EW, pady=12
+    )
+    ttk.Label(
+        p3.body,
+        text="云端视觉 OCR（OpenAI 兼容视觉模型；留空地址/密钥 = 关闭，仅本地识别）",
+        font=theme.UI_FONT_BOLD,
+    ).grid(row=12, column=0, columnspan=4, sticky=tk.W, pady=(2, 4))
+    ttk.Label(
+        p3.body,
+        text="本功能直接用自己的一套连接参数，不再引用「平台账号」页。",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+    ).grid(row=13, column=0, columnspan=4, sticky=tk.W)
     ocr_body = ttk.Frame(p3.body)
     ocr_body.grid(row=14, column=0, columnspan=4, sticky=tk.EW, pady=(4, 0))
     ocr_v = _make_conn_editor(ocr_body, cfg.ocr, vision=True)
 
-    ocr_test_lbl = ttk.Label(p3.body, text="", foreground=theme.TEXT_MUTED,
-                             font=theme.UI_FONT_SMALL, wraplength=500, justify=tk.LEFT)
+    ocr_test_lbl = ttk.Label(
+        p3.body,
+        text="",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+        wraplength=500,
+        justify=tk.LEFT,
+    )
     ocr_test_lbl.grid(row=13, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
-    ttk.Button(p3.body, text="测试视觉 OCR 连接",
-               command=lambda: _test_ocr(
-                   app, ocr_v["base_url"].get(), ocr_v["vision_model"].get(),
-                   ocr_v["api_key"].get(), ocr_test_lbl)
-               ).grid(row=14, column=0, sticky=tk.W, pady=(6, 0))
+    ttk.Button(
+        p3.body,
+        text="测试视觉 OCR 连接",
+        command=lambda: _test_ocr(
+            app,
+            ocr_v["base_url"].get(),
+            ocr_v["vision_model"].get(),
+            ocr_v["api_key"].get(),
+            ocr_test_lbl,
+        ),
+    ).grid(row=14, column=0, sticky=tk.W, pady=(6, 0))
 
-    ocr_eff_lbl = ttk.Label(p3.body, text="", foreground=theme.TEXT_MUTED,
-                            font=theme.UI_FONT_SMALL, wraplength=500, justify=tk.LEFT)
+    ocr_eff_lbl = ttk.Label(
+        p3.body,
+        text="",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+        wraplength=500,
+        justify=tk.LEFT,
+    )
     ocr_eff_lbl.grid(row=15, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
 
     def _refresh_ocr_eff(*_) -> None:
@@ -347,36 +537,56 @@ def open_api_settings(window) -> None:
             ocr_eff_lbl.config(text="当前引擎为本地识别，未使用云端 OCR 参数。")
             return
         state = "已填写" if has_key else "未填写，云端 OCR 不可用"
-        ocr_eff_lbl.config(
-            text=f"当前生效：\n  视觉模型：{model}\n  API Key：{state}")
+        ocr_eff_lbl.config(text=f"当前生效：\n  视觉模型：{model}\n  API Key：{state}")
+
     ocr_eng.trace_add("write", _refresh_ocr_eff)
     _refresh_ocr_eff()
 
-    ttk.Separator(p3.body, orient=tk.HORIZONTAL).grid(row=23, column=0, sticky=tk.EW, pady=12)
+    ttk.Separator(p3.body, orient=tk.HORIZONTAL).grid(
+        row=23, column=0, sticky=tk.EW, pady=12
+    )
     from ...core.paths import config_path
-    ttk.Label(p3.body, text=f"配置文件：{config_path()}", foreground=theme.TEXT_MUTED,
-              font=theme.UI_FONT_SMALL, wraplength=500, justify=tk.LEFT
-              ).grid(row=24, column=0, sticky=tk.W, pady=(14, 0))
+
+    ttk.Label(
+        p3.body,
+        text=f"配置文件：{config_path()}",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+        wraplength=500,
+        justify=tk.LEFT,
+    ).grid(row=24, column=0, sticky=tk.W, pady=(14, 0))
 
     # ================= 页签 5：外观 / 界面 =================
     p4 = _ScrollableFrame(nb)
     nb.add(p4, text="外观")
 
     # 启动界面模式（simple / advanced）——与主题配色同页，方便整体调整外观
-    ttk.Label(p4.body, text="启动界面模式").grid(row=0, column=4, sticky=tk.W, padx=(16, 0))
+    ttk.Label(p4.body, text="启动界面模式").grid(
+        row=0, column=4, sticky=tk.W, padx=(16, 0)
+    )
     mode = tk.StringVar(value=cfg.ui.mode)
-    ttk.Combobox(p4.body, textvariable=mode, state="readonly", width=18,
-                 values=["simple", "advanced"]).grid(row=1, column=4, sticky=tk.W,
-                                                     pady=(2, 0))
+    ttk.Combobox(
+        p4.body,
+        textvariable=mode,
+        state="readonly",
+        width=18,
+        values=["simple", "advanced"],
+    ).grid(row=1, column=4, sticky=tk.W, pady=(2, 0))
 
     # 窗口尺寸：改 config 里 UiConfig.window_size（应用启动时读取），「记住当前」回填主窗大小
-    ttk.Label(p4.body, text="窗口尺寸（宽x高）").grid(row=0, column=5, sticky=tk.W, padx=(16, 0))
+    ttk.Label(p4.body, text="窗口尺寸（宽x高）").grid(
+        row=0, column=5, sticky=tk.W, padx=(16, 0)
+    )
     win_size = tk.StringVar(value=cfg.ui.window_size)
-    ttk.Entry(p4.body, textvariable=win_size, width=11
-              ).grid(row=1, column=5, sticky=tk.W, padx=(16, 0), pady=(2, 0))
-    ttk.Button(p4.body, text="记住当前", width=8,
-               command=lambda: win_size.set(root.geometry().split("+")[0])
-               ).grid(row=1, column=6, sticky=tk.W, pady=(2, 0))
+    ttk.Entry(p4.body, textvariable=win_size, width=11).grid(
+        row=1, column=5, sticky=tk.W, padx=(16, 0), pady=(2, 0)
+    )
+    ttk.Button(
+        p4.body,
+        text="记住当前",
+        width=8,
+        command=lambda: win_size.set(root.geometry().split("+")[0]),
+    ).grid(row=1, column=6, sticky=tk.W, pady=(2, 0))
 
     from . import theme as _theme
     from .color_picker import pick_screen_color
@@ -385,40 +595,58 @@ def open_api_settings(window) -> None:
     theme_fam = tk.StringVar(value=fam)
     theme_mode = tk.StringVar(value=mod)
     ttk.Label(p4.body, text="主题色").grid(row=0, column=0, sticky=tk.W)
-    ttk.Combobox(p4.body, textvariable=theme_fam, state="readonly", width=18,
-                 values=list(_theme.THEME_FAMILY_LABELS.keys())
-                 ).grid(row=1, column=0, sticky=tk.W, pady=(2, 6))
+    ttk.Combobox(
+        p4.body,
+        textvariable=theme_fam,
+        state="readonly",
+        width=18,
+        values=list(_theme.THEME_FAMILY_LABELS.keys()),
+    ).grid(row=1, column=0, sticky=tk.W, pady=(2, 6))
     ttk.Label(p4.body, text="模式").grid(row=0, column=1, sticky=tk.W, padx=(16, 0))
-    ttk.Radiobutton(p4.body, text="浅色", variable=theme_mode,
-                    value="light").grid(row=1, column=1, sticky=tk.W, padx=(16, 0))
-    ttk.Radiobutton(p4.body, text="深色", variable=theme_mode,
-                    value="dark").grid(row=1, column=2, sticky=tk.W)
+    ttk.Radiobutton(p4.body, text="浅色", variable=theme_mode, value="light").grid(
+        row=1, column=1, sticky=tk.W, padx=(16, 0)
+    )
+    ttk.Radiobutton(p4.body, text="深色", variable=theme_mode, value="dark").grid(
+        row=1, column=2, sticky=tk.W
+    )
 
     # 界面字号：所有字体按这个基准派生（正文/标题/等宽同步放大）
     ttk.Label(p4.body, text="界面字号").grid(row=0, column=3, sticky=tk.W, padx=(16, 0))
     font_size = tk.IntVar(value=int(cfg.ui.font_size or 11))
-    ttk.Spinbox(p4.body, from_=8, to=18, width=5, textvariable=font_size
-                ).grid(row=1, column=3, sticky=tk.W, padx=(16, 0))
+    ttk.Spinbox(p4.body, from_=8, to=18, width=5, textvariable=font_size).grid(
+        row=1, column=3, sticky=tk.W, padx=(16, 0)
+    )
 
-    ttk.Separator(p4.body, orient=tk.HORIZONTAL).grid(row=2, column=0, columnspan=7,
-                                                 sticky=tk.EW, pady=12)
+    ttk.Separator(p4.body, orient=tk.HORIZONTAL).grid(
+        row=2, column=0, columnspan=7, sticky=tk.EW, pady=12
+    )
 
     # 取色器收进「高级」折叠区：simple 模式默认收起（降低认知负担），
     # advanced 模式展开；配色可导出/导入（P1-3）
     picker = ttk.LabelFrame(p4.body, text="自定义配色（高级）", padding=(8, 6))
     picker.grid(row=3, column=0, columnspan=7, sticky=tk.EW)
 
-    ttk.Label(picker, text="自定义配色（覆盖上面主题，留空 = 用主题默认）",
-              font=theme.UI_FONT_BOLD).grid(row=0, column=0, columnspan=4,
-                                            sticky=tk.W, pady=(0, 6))
+    ttk.Label(
+        picker,
+        text="自定义配色（覆盖上面主题，留空 = 用主题默认）",
+        font=theme.UI_FONT_BOLD,
+    ).grid(row=0, column=0, columnspan=4, sticky=tk.W, pady=(0, 6))
 
     # 可自定义的角色：token → 中文名
     _ROLE_LABELS = {
-        "accent": "主色", "accent_hover": "主色(悬停)", "border": "边框",
-        "canvas_bg": "对话区背景", "card_bg": "卡片背景", "input_bg": "输入框背景",
-        "text_main": "正文文字", "text_muted": "次要文字", "text_hint": "提示文字",
-        "danger": "危险/删除", "assist_bg": "AI 气泡背景",
-        "assist_border": "AI 气泡边框", "system_bg": "系统气泡背景",
+        "accent": "主色",
+        "accent_hover": "主色(悬停)",
+        "border": "边框",
+        "canvas_bg": "对话区背景",
+        "card_bg": "卡片背景",
+        "input_bg": "输入框背景",
+        "text_main": "正文文字",
+        "text_muted": "次要文字",
+        "text_hint": "提示文字",
+        "danger": "危险/删除",
+        "assist_bg": "AI 气泡背景",
+        "assist_border": "AI 气泡边框",
+        "system_bg": "系统气泡背景",
         "system_border": "系统气泡边框",
     }
     overrides = dict(cfg.ui.theme_colors or {})
@@ -429,6 +657,7 @@ def open_api_settings(window) -> None:
 
     def _pick_color(tok: str) -> None:
         from tkinter import colorchooser
+
         cur = _swatch_color(tok)
         rgb, hexv = colorchooser.askcolor(initialcolor=cur, parent=win)
         if not hexv:
@@ -448,22 +677,25 @@ def open_api_settings(window) -> None:
                 swatch_btns[tok].config(bg=hexv)
             except Exception:
                 pass
+
         # 先收起设置页再取色，避免取到设置窗口自身
         win.withdraw()
         pick_screen_color(lambda h: (win.deiconify(), _cb(h)))
 
     from tkinter import colorchooser  # 供下方复用
+
     r = 1
     for tok, label in _ROLE_LABELS.items():
         ttk.Label(picker, text=label).grid(row=r, column=0, sticky=tk.W, pady=2)
-        btn = tk.Button(picker, width=4, relief=tk.FLAT, bd=1,
-                        bg=_swatch_color(tok), cursor="hand2")
+        btn = tk.Button(
+            picker, width=4, relief=tk.FLAT, bd=1, bg=_swatch_color(tok), cursor="hand2"
+        )
         btn.grid(row=r, column=1, sticky=tk.W, padx=(8, 4), pady=2)
         swatch_btns[tok] = btn
         btn.config(command=lambda t=tok: _pick_color(t))
-        ttk.Button(picker, text="屏幕取色", width=8,
-                   command=lambda t=tok: _pick_screen(t)
-                   ).grid(row=r, column=2, sticky=tk.W, padx=(0, 4), pady=2)
+        ttk.Button(
+            picker, text="屏幕取色", width=8, command=lambda t=tok: _pick_screen(t)
+        ).grid(row=r, column=2, sticky=tk.W, padx=(0, 4), pady=2)
         r += 1
 
     def _reset_colors():
@@ -476,28 +708,41 @@ def open_api_settings(window) -> None:
 
     def _export_colors():
         from tkinter import filedialog
+
         path = filedialog.asksaveasfilename(
-            parent=win, title="导出配色", defaultextension=".json",
-            filetypes=[("JSON", "*.json")])
+            parent=win,
+            title="导出配色",
+            defaultextension=".json",
+            filetypes=[("JSON", "*.json")],
+        )
         if not path:
             return
         import json
+
         try:
             with open(path, "w", encoding="utf-8") as f:
-                json.dump({k: v for k, v in overrides.items()
-                           if k in _theme.TOKENS}, f, ensure_ascii=False, indent=2)
-            messagebox.showinfo("导出配色", f"已导出 {len(overrides)} 项 → {path}",
-                                parent=win)
+                json.dump(
+                    {k: v for k, v in overrides.items() if k in _theme.TOKENS},
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            messagebox.showinfo(
+                "导出配色", f"已导出 {len(overrides)} 项 → {path}", parent=win
+            )
         except Exception as e:
             messagebox.showwarning("导出失败", str(e), parent=win)
 
     def _import_colors():
         from tkinter import filedialog
+
         path = filedialog.askopenfilename(
-            parent=win, title="导入配色", filetypes=[("JSON", "*.json")])
+            parent=win, title="导入配色", filetypes=[("JSON", "*.json")]
+        )
         if not path:
             return
         import json
+
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -505,8 +750,9 @@ def open_api_settings(window) -> None:
             messagebox.showwarning("导入失败", f"无法读取: {e}", parent=win)
             return
         if not isinstance(data, dict):
-            messagebox.showwarning("导入失败", "文件格式不对：应为 {角色: 颜色} 的 JSON。",
-                                   parent=win)
+            messagebox.showwarning(
+                "导入失败", "文件格式不对：应为 {角色: 颜色} 的 JSON。", parent=win
+            )
             return
         for k, v in data.items():
             if k in _theme.TOKENS and isinstance(v, str) and v.startswith("#"):
@@ -515,17 +761,24 @@ def open_api_settings(window) -> None:
                     swatch_btns[k].config(bg=v)
                 except Exception:
                     pass
-        messagebox.showinfo("导入配色", f"已导入 {len(overrides)} 项配色。\n点「保存」后生效。",
-                            parent=win)
+        messagebox.showinfo(
+            "导入配色",
+            f"已导入 {len(overrides)} 项配色。\n点「保存」后生效。",
+            parent=win,
+        )
 
-    ttk.Button(picker, text="重置自定义配色", command=_reset_colors
-               ).grid(row=r, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
-    ttk.Button(picker, text="界面取色定位…", command=lambda: _open_inspector()
-               ).grid(row=r, column=2, columnspan=2, sticky=tk.W, pady=(8, 0))
-    ttk.Button(picker, text="导出配色", command=_export_colors
-               ).grid(row=r + 1, column=0, columnspan=2, sticky=tk.W, pady=(4, 0))
-    ttk.Button(picker, text="导入配色", command=_import_colors
-               ).grid(row=r + 1, column=2, columnspan=2, sticky=tk.W, pady=(4, 0))
+    ttk.Button(picker, text="重置自定义配色", command=_reset_colors).grid(
+        row=r, column=0, columnspan=2, sticky=tk.W, pady=(8, 0)
+    )
+    ttk.Button(picker, text="界面取色定位…", command=lambda: _open_inspector()).grid(
+        row=r, column=2, columnspan=2, sticky=tk.W, pady=(8, 0)
+    )
+    ttk.Button(picker, text="导出配色", command=_export_colors).grid(
+        row=r + 1, column=0, columnspan=2, sticky=tk.W, pady=(4, 0)
+    )
+    ttk.Button(picker, text="导入配色", command=_import_colors).grid(
+        row=r + 1, column=2, columnspan=2, sticky=tk.W, pady=(4, 0)
+    )
 
     def _open_inspector() -> None:
         """框选屏幕上任意区域 → 自动判断它对应哪个主题角色 → 回填该处颜色。
@@ -543,7 +796,9 @@ def open_api_settings(window) -> None:
                 messagebox.showinfo(
                     "取色结果",
                     f"取到颜色 {hexv}，但该区域不属于可自定义的角色。\n"
-                    "可手动选一个最接近的角色再用「屏幕取色」。", parent=win)
+                    "可手动选一个最接近的角色再用「屏幕取色」。",
+                    parent=win,
+                )
                 return
             overrides[tok] = hexv
             try:
@@ -553,7 +808,9 @@ def open_api_settings(window) -> None:
             messagebox.showinfo(
                 "已识别",
                 f"该区域对应「{_ROLE_LABELS[tok]}」，已填入 {hexv}。\n"
-                "点「保存」后生效。", parent=win)
+                "点「保存」后生效。",
+                parent=win,
+            )
 
         win.withdraw()
         inspect_ui_role(window, _cb)
@@ -578,8 +835,9 @@ def open_api_settings(window) -> None:
     tts_cfg = cfg.tts
     tts_svc = app.services.get("tts")
 
-    ttk.Label(p5.body, text="朗读引擎", font=theme.UI_FONT_BOLD
-              ).grid(row=0, column=0, sticky=tk.W, pady=(0, 4))
+    ttk.Label(p5.body, text="朗读引擎", font=theme.UI_FONT_BOLD).grid(
+        row=0, column=0, sticky=tk.W, pady=(0, 4)
+    )
     tts_engine = tk.StringVar(value=tts_cfg.engine or "auto")
     _ENGINE_LABELS = {
         "auto": "自动（在线优先，断网自动降级）",
@@ -587,11 +845,13 @@ def open_api_settings(window) -> None:
         "sapi": "系统语音（离线，机械音）",
     }
     for i, (val, lab) in enumerate(_ENGINE_LABELS.items()):
-        ttk.Radiobutton(p5.body, text=lab, variable=tts_engine, value=val
-                        ).grid(row=1 + i, column=0, columnspan=3, sticky=tk.W)
+        ttk.Radiobutton(p5.body, text=lab, variable=tts_engine, value=val).grid(
+            row=1 + i, column=0, columnspan=3, sticky=tk.W
+        )
 
-    ttk.Separator(p5.body, orient=tk.HORIZONTAL).grid(row=4, column=0, columnspan=3,
-                                                 sticky=tk.EW, pady=10)
+    ttk.Separator(p5.body, orient=tk.HORIZONTAL).grid(
+        row=4, column=0, columnspan=3, sticky=tk.EW, pady=10
+    )
 
     ttk.Label(p5.body, text="音色（仅在线引擎生效）").grid(row=5, column=0, sticky=tk.W)
     _voices = tts_svc.list_voices() if tts_svc else []
@@ -599,25 +859,32 @@ def open_api_settings(window) -> None:
     _label_to_id = {f"{lab}  ·  {vid}": vid for vid, lab in _voices}
     tts_voice = tk.StringVar()
     cur_voice = tts_cfg.voice or "zh-CN-XiaoxiaoNeural"
-    tts_voice.set(next((l for l, v in _label_to_id.items() if v == cur_voice),
-                       cur_voice))
-    ttk.Combobox(p5.body, textvariable=tts_voice, state="readonly", width=42,
-                 values=_voice_labels).grid(row=6, column=0, columnspan=3,
-                                            sticky=tk.W, pady=(2, 8))
+    tts_voice.set(
+        next((l for l, v in _label_to_id.items() if v == cur_voice), cur_voice)
+    )
+    ttk.Combobox(
+        p5.body,
+        textvariable=tts_voice,
+        state="readonly",
+        width=42,
+        values=_voice_labels,
+    ).grid(row=6, column=0, columnspan=3, sticky=tk.W, pady=(2, 8))
 
     ttk.Label(p5.body, text="语速（%）").grid(row=7, column=0, sticky=tk.W)
     tts_rate = tk.IntVar(value=int(tts_cfg.rate or 0))
-    ttk.Spinbox(p5.body, from_=-50, to=100, increment=10, width=6,
-                textvariable=tts_rate).grid(row=7, column=1, sticky=tk.W, padx=(8, 0))
+    ttk.Spinbox(
+        p5.body, from_=-50, to=100, increment=10, width=6, textvariable=tts_rate
+    ).grid(row=7, column=1, sticky=tk.W, padx=(8, 0))
     ttk.Label(p5.body, text="音量（%）").grid(row=8, column=0, sticky=tk.W, pady=(4, 0))
     tts_vol = tk.IntVar(value=int(tts_cfg.volume or 0))
-    ttk.Spinbox(p5.body, from_=-50, to=50, increment=10, width=6,
-                textvariable=tts_vol).grid(row=8, column=1, sticky=tk.W,
-                                           padx=(8, 0), pady=(4, 0))
+    ttk.Spinbox(
+        p5.body, from_=-50, to=50, increment=10, width=6, textvariable=tts_vol
+    ).grid(row=8, column=1, sticky=tk.W, padx=(8, 0), pady=(4, 0))
 
     tts_auto = tk.BooleanVar(value=bool(tts_cfg.auto_read))
-    ttk.Checkbutton(p5.body, text="翻译完成后自动朗读译文", variable=tts_auto
-                    ).grid(row=9, column=0, columnspan=3, sticky=tk.W, pady=(10, 0))
+    ttk.Checkbutton(p5.body, text="翻译完成后自动朗读译文", variable=tts_auto).grid(
+        row=9, column=0, columnspan=3, sticky=tk.W, pady=(10, 0)
+    )
 
     def _test_tts() -> None:
         if tts_svc is None:
@@ -625,6 +892,7 @@ def open_api_settings(window) -> None:
             return
         # 用页面上「当下选的值」试听，而不是已保存的值 —— 不然要先保存才能试
         import copy
+
         probe = copy.copy(tts_cfg)
         probe.engine = tts_engine.get()
         probe.voice = _label_to_id.get(tts_voice.get(), tts_voice.get())
@@ -635,35 +903,50 @@ def open_api_settings(window) -> None:
 
         def _restore(msg: str) -> None:
             tts_svc.cfg = old
+            # on_status 来自 TTS 后台线程，禁止直触 Tk（win.after 也是 Tcl 调用），
+            # 必须 post 回主线程 —— 与 app.py 的 TTS 接线同规约。
             try:
-                win.after(0, lambda: tts_lbl.config(text=msg))
+                window.ui.post(lambda: tts_lbl.config(text=msg))
             except Exception:
                 pass
 
         tts_svc.speak("WinOCR 朗读测试，Hello from WinOCR.", on_status=_restore)
 
-    ttk.Button(p5.body, text="试听", command=_test_tts
-               ).grid(row=10, column=0, sticky=tk.W, pady=(12, 0))
-    ttk.Button(p5.body, text="停止", command=lambda: tts_svc and tts_svc.stop()
-               ).grid(row=10, column=1, sticky=tk.W, pady=(12, 0), padx=(8, 0))
-    tts_lbl = ttk.Label(p5.body, text=(tts_svc.engine_display() if tts_svc
-                                  else "朗读服务不可用"),
-                        foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL)
+    ttk.Button(p5.body, text="试听", command=_test_tts).grid(
+        row=10, column=0, sticky=tk.W, pady=(12, 0)
+    )
+    ttk.Button(p5.body, text="停止", command=lambda: tts_svc and tts_svc.stop()).grid(
+        row=10, column=1, sticky=tk.W, pady=(12, 0), padx=(8, 0)
+    )
+    tts_lbl = ttk.Label(
+        p5.body,
+        text=(tts_svc.engine_display() if tts_svc else "朗读服务不可用"),
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+    )
     tts_lbl.grid(row=11, column=0, columnspan=3, sticky=tk.W, pady=(6, 0))
 
-    ttk.Label(p5.body, text="提示：朗读热键 Ctrl+Shift+R；正在朗读时再按一次即停止。\n"
-                       "在线音色需联网首次拉取；离线时自动改用系统语音。",
-              foreground=theme.TEXT_MUTED, font=theme.UI_FONT_SMALL,
-              justify=tk.LEFT).grid(row=12, column=0, columnspan=3,
-                                    sticky=tk.W, pady=(10, 0))
+    ttk.Label(
+        p5.body,
+        text="提示：朗读热键 Ctrl+Shift+R；正在朗读时再按一次即停止。\n"
+        "在线音色需联网首次拉取；离线时自动改用系统语音。",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+        justify=tk.LEFT,
+    ).grid(row=12, column=0, columnspan=3, sticky=tk.W, pady=(10, 0))
 
     # ================= 翻译生效预览 =================
     def _refresh_eff(*_) -> None:
         eff = app.effective_translate_llm()
-        eff_lbl.config(text=(f"当前生效（翻译功能自己的连接参数）：\n"
-                             f"  模型：{eff['model'] or '（内置默认）'}\n"
-                             f"  URL：{eff['url'] or '（内置默认）'}\n"
-                             f"  API Key：{'已填写' if eff['has_key'] else '未填写，glm 引擎不可用'}"))
+        eff_lbl.config(
+            text=(
+                f"当前生效（翻译功能自己的连接参数）：\n"
+                f"  模型：{eff['model'] or '（内置默认）'}\n"
+                f"  URL：{eff['url'] or '（内置默认）'}\n"
+                f"  API Key：{'已填写' if eff['has_key'] else '未填写，glm 引擎不可用'}"
+            )
+        )
+
     _refresh_eff()
 
     # ---- 设置内搜索（P2-1）：遍历五个页签的 Label/Checkbutton 文本 ----
@@ -679,7 +962,7 @@ def open_api_settings(window) -> None:
             try:
                 for w in sf.body.winfo_children():
                     try:
-                        txt = (w.cget("text") or "")
+                        txt = w.cget("text") or ""
                     except Exception:
                         txt = ""
                     if txt and q in txt.lower():
@@ -693,7 +976,8 @@ def open_api_settings(window) -> None:
             except Exception:
                 pass
             search_hint.config(
-                text=f"命中 {len(hits)} 项 → 已切到「{nb.tab(first_idx, 'text')}」页（{first_txt}）")
+                text=f"命中 {len(hits)} 项 → 已切到「{nb.tab(first_idx, 'text')}」页（{first_txt}）"
+            )
         else:
             search_hint.config(text="无匹配")
 
@@ -713,6 +997,8 @@ def open_api_settings(window) -> None:
             cfg.ai.provider = provider.get().split(" — ")[0].strip()
             t = cfg.translate
             t.engine = eng.get().split(" — ")[0].strip()
+            if llama_models:
+                t.text_model = llama_model_var.get().strip()
             t.target = tgt.get().split(" — ")[0].strip()
             t.auto_translate = auto_t.get()
             t.offline_mode = offline.get()
@@ -740,8 +1026,7 @@ def open_api_settings(window) -> None:
         prev_colors = dict(cfg.ui.theme_colors or {})
         prev_font = int(cfg.ui.font_size or 11)
         cfg.ui.theme = f"{theme_fam.get()}:{theme_mode.get()}"
-        cfg.ui.theme_colors = {k: v for k, v in overrides.items()
-                               if k in _theme.TOKENS}
+        cfg.ui.theme_colors = {k: v for k, v in overrides.items() if k in _theme.TOKENS}
         try:
             cfg.ui.font_size = max(8, min(18, int(font_size.get() or 11)))
         except Exception:
@@ -757,14 +1042,16 @@ def open_api_settings(window) -> None:
             pass
         cfg.tts.auto_read = bool(tts_auto.get())
 
-        app.apply_config()                 # 一处生效：重新注入所有服务并落盘
+        app.apply_config()  # 一处生效：重新注入所有服务并落盘
         window.refresh_engine_label()
         window.apply_ui_mode(cfg.ui.mode)
         window.set_status("设置已保存并生效")
 
-        theme_changed = (cfg.ui.theme != prev_theme
-                         or dict(cfg.ui.theme_colors or {}) != prev_colors
-                         or int(cfg.ui.font_size or 11) != prev_font)
+        theme_changed = (
+            cfg.ui.theme != prev_theme
+            or dict(cfg.ui.theme_colors or {}) != prev_colors
+            or int(cfg.ui.font_size or 11) != prev_font
+        )
         win.destroy()
         if theme_changed and getattr(app, "ui", None) is not None:
             root.after(20, lambda: app.ui.reload_ui())

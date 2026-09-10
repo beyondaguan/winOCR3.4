@@ -13,6 +13,7 @@ hotkey_settings.py 四套机制并存，字段分散、无类型约束、互相�
 不再有「平台账号」中间层，也不再按连接名引用。旧配置的散落字段在加载时
 直接迁移进各功能自己的字段，无需用户手改。
 """
+
 from __future__ import annotations
 
 import logging
@@ -45,6 +46,7 @@ class ConnectableConfig:
       （推理类视觉模型如 GLM-4.1V-9B-Thinking 常不支持 temperature/top_p，
       发默认 0.7 会直接 400 报错）；``>0`` = 视觉专属值。
     """
+
     base_url: str = ""
     api_key: str = ""
     text_model: str = ""
@@ -69,11 +71,11 @@ class ConnectableConfig:
 # ======================================================================
 @dataclass
 class OcrConfig(ConnectableConfig):
-    engine: str = "rapidocr"          # rapidocr(本地) / vision_ocr(云端视觉模型)
-    preprocess: bool = True           # 小图放大/对比度增强（代码截图智能保留彩色）
-    model_type: str = "tiny"          # tiny / small / medium（本地档位）
+    engine: str = "rapidocr"  # rapidocr(本地) / vision_ocr(云端视觉模型)
+    preprocess: bool = True  # 小图放大/对比度增强（代码截图智能保留彩色）
+    model_type: str = "tiny"  # tiny / small / medium（本地档位）
     # --- 结构化输出（几何重建表格/版面，离线零额外模型）---
-    structured: bool = False         # True = 用包围框把零散文字拼回 Markdown 表格
+    structured: bool = False  # True = 用包围框把零散文字拼回 Markdown 表格
     # --- 模型档位由用户在设置里手动选（tiny / small / medium）---
     # 原本的「低置信度自动升档重试」已移除：升档要换档重建引擎（模型重新加载），
     # 实测让一次识别从 ~0.9s 涨到 ~3.8s，慢 4 倍，且常常白升（置信度已 0.99）。
@@ -87,21 +89,23 @@ class OcrConfig(ConnectableConfig):
 
 @dataclass
 class TranslateConfig(ConnectableConfig):
-    engine: str = "auto"              # auto=回退链 / 指定单引擎
-    target: str = "en"                # 默认译向（中→英）
-    auto_translate: bool = True       # OCR 完成后自动翻译
-    offline_mode: bool = False        # 离线优先：auto 回退链只走 online=False 引擎
+    engine: str = "auto"  # auto=回退链 / 指定单引擎
+    target: str = "en"  # 默认译向（中→英）
+    auto_translate: bool = True  # OCR 完成后自动翻译
+    offline_mode: bool = False  # 离线优先：auto 回退链只走 online=False 引擎
     # auto 回退链默认顺序：在线引擎在前（配好 Key 才 available），
     # argos 本地离线**兜底放最后**——否则离线永远成功、在线 API 永不执行
     # （用户实测：配了 GLM Key 却一直是 argos 差译文，2026-09-02 定位）。
     fallback_order: List[str] = field(
-        default_factory=lambda: ["glm", "hunyuan", "mymemory", "argos"]
+        default_factory=lambda: ["glm", "hunyuan", "mymemory", "llama_cpp", "argos"]
     )
 
 
 @dataclass
 class AiConfig(ConnectableConfig):
-    provider: str = "glm"             # AI 提供方（glm 等）；连接参数在本配置内直接持有
+    provider: str = "glm"  # AI 提供方：glm / openai_compat / llama_cpp（本地离线）
+    # 连接参数在本配置内直接持有（base_url/api_key/text_model 等）
+    # llama_cpp 提供方：text_model 填 GGUF 文件名，api_key/base_url 忽略
 
 
 @dataclass
@@ -110,9 +114,10 @@ class HotkeyConfig:
 
     默认组合键由胶囊声明（capsule.hotkey），这里只记录用户覆盖。
     """
+
     enabled: bool = True
     quit: str = "ctrl+shift+q"
-    overrides: dict = field(default_factory=dict)   # 胶囊名 → 用户自定义组合键
+    overrides: dict = field(default_factory=dict)  # 胶囊名 → 用户自定义组合键
 
     def resolved(self, action: str, default: str = "") -> str:
         """某个动作最终生效的组合键：用户覆盖 > 胶囊声明默认。"""
@@ -128,6 +133,7 @@ class ProjectConfig:
     - ``open``：是否在标签栏展开（关闭标签 = open=False，数据全留）；
     - ``translate_target``：译向覆盖，空串 = 用全局 config.translate.target。
     """
+
     id: str = "default"
     name: str = "默认"
     open: bool = True
@@ -136,16 +142,17 @@ class ProjectConfig:
 
 @dataclass
 class UiConfig:
-    mode: str = "simple"              # simple / advanced
+    mode: str = "simple"  # simple / advanced
     theme: str = "light"
-    font_size: int = 11               # 默认 11pt（旧 10 偏小，多数用户看不清）
+    font_size: int = 11  # 默认 11pt（旧 10 偏小，多数用户看不清）
     # 3.4.3 起「自动划词」与 Alt+右键 钩子监听已取消，仅保留 Ctrl+Shift+D 按键触发。
     # 以下两个字段仅作旧配置兼容保留，不再被 UI 使用。
-    selection_enabled: bool = True    # （已废弃）划词总开关
-    selection_auto: bool = False      # （已废弃）选中即翻译
+    selection_enabled: bool = True  # （已废弃）划词总开关
+    selection_auto: bool = False  # （已废弃）选中即翻译
     window_size: str = "820x600"
     theme_colors: dict = field(
-        default_factory=dict)         # 自定义界面配色：{token: {role: hex}}
+        default_factory=dict
+    )  # 自定义界面配色：{token: {role: hex}}
 
 
 @dataclass
@@ -155,11 +162,12 @@ class TtsConfig:
     engine="auto" 时先试 edge，失败（无网/被墙/超时）自动降级 sapi，
     所以断网也能读出声，不会「点了没反应」。
     """
-    engine: str = "auto"              # auto / edge / sapi
-    voice: str = "zh-CN-XiaoxiaoNeural"   # edge 音色；sapi 时忽略
-    rate: int = 0                     # 语速增量，百分比：-50 ~ +100
-    volume: int = 0                   # 音量增量，百分比：-50 ~ +50
-    auto_read: bool = False           # 翻译完成后自动朗读译文
+
+    engine: str = "auto"  # auto / edge / sapi
+    voice: str = "zh-CN-XiaoxiaoNeural"  # edge 音色；sapi 时忽略
+    rate: int = 0  # 语速增量，百分比：-50 ~ +100
+    volume: int = 0  # 音量增量，百分比：-50 ~ +50
+    auto_read: bool = False  # 翻译完成后自动朗读译文
 
 
 @dataclass
@@ -170,7 +178,20 @@ class PluginConfig:
     其余全部正常发现。留空 = 全部启用（默认）。实例在 build() 时装配，
     改动需重启程序后完全生效。
     """
+
     blacklist: List[str] = field(default_factory=list)
+
+
+@dataclass
+class LoggingConfig:
+    """日志系统配置（3.4.21）。
+
+    优先级：环境变量 WINOCR_LOG_LEVEL / WINOCR_LOG_DIR > 本配置 > 默认值。
+    """
+
+    level: str = "INFO"  # DEBUG / INFO / WARNING / ERROR
+    dir: str = ""  # 空 = 默认（user_dir()/logs）
+    console: bool = True  # 是否同时输出到控制台（pythonw 自动跳过）
 
 
 @dataclass
@@ -182,9 +203,9 @@ class AppConfig:
     ui: UiConfig = field(default_factory=UiConfig)
     tts: TtsConfig = field(default_factory=TtsConfig)
     plugin: PluginConfig = field(default_factory=PluginConfig)
+    logging: LoggingConfig = field(default_factory=LoggingConfig)
     # 真·项目栏（3.4 MVP）：项目注册表 + 当前项目。默认含一个不可关的「默认」项目。
-    projects: List[ProjectConfig] = field(
-        default_factory=lambda: [ProjectConfig()])
+    projects: List[ProjectConfig] = field(default_factory=lambda: [ProjectConfig()])
     current_project: str = "default"
 
     # 运行期记录来源文件，save() 无参即可回写
@@ -198,10 +219,17 @@ class AppConfig:
     def sections(self):
         # projects 是 dataclass 列表，写成根级数组 projects = [...]，
         # 必须排在任意 [section] 表头之前（TOML 里表头后的裸键会归属该表）。
-        return [("projects", self.projects), ("ocr", self.ocr),
-                ("translate", self.translate), ("ai", self.ai),
-                ("hotkey", self.hotkey), ("ui", self.ui), ("tts", self.tts),
-                ("plugin", self.plugin)]
+        return [
+            ("projects", self.projects),
+            ("ocr", self.ocr),
+            ("translate", self.translate),
+            ("ai", self.ai),
+            ("hotkey", self.hotkey),
+            ("ui", self.ui),
+            ("tts", self.tts),
+            ("plugin", self.plugin),
+            ("logging", self.logging),
+        ]
 
     def to_dict(self) -> dict:
         d = {name: _asdict_deep(obj) for name, obj in self.sections()}
@@ -211,6 +239,7 @@ class AppConfig:
     @classmethod
     def from_dict(cls, d: dict) -> "AppConfig":
         """按字段名安全构造：未知键忽略、类型不符自动纠正，坏配置不会让程序崩溃。"""
+
         def build(dc_cls, raw):
             raw = raw or {}
             kwargs = {}
@@ -229,6 +258,7 @@ class AppConfig:
             ui=build(UiConfig, d.get("ui")),
             tts=build(TtsConfig, d.get("tts")),
             plugin=build(PluginConfig, d.get("plugin")),
+            logging=build(LoggingConfig, d.get("logging")),
         )
         cfg._apply_legacy_migration(d)
         # 真·项目栏：解析 projects 列表 + current_project（强制保证 default 存在、current 合法）
@@ -332,6 +362,7 @@ class AppConfig:
     @classmethod
     def load(cls, path: Optional[str] = None) -> "AppConfig":
         from .paths import config_path
+
         p = path or str(config_path())
         if not os.path.isfile(p):
             cfg = cls.defaults()
@@ -360,6 +391,7 @@ class AppConfig:
     def save(self, path: Optional[str] = None) -> str:
         """写出可读 TOML。字面量严格按 TOML 规范（bool 小写、数字裸写）。"""
         from .paths import config_path
+
         p = path or self._source_path or str(config_path())
         lines = ["# WinOCR 3.0 配置文件（纯数据，程序不会执行它）", ""]
         # 根级标量（current_project）必须写在任何 [section] 表头之前，
@@ -385,6 +417,7 @@ class AppConfig:
 
 
 # ---------------- 工具函数 ----------------
+
 
 def _s(v: Any) -> str:
     return "" if v is None else str(v).strip()
@@ -430,9 +463,9 @@ def _asdict_deep(obj):
 
 def _toml_literal(v: Any) -> str:
     if is_dataclass(v) and not isinstance(v, type):
-        v = asdict(v)                       # dataclass 实例（如 ProjectConfig）先转 dict
+        v = asdict(v)  # dataclass 实例（如 ProjectConfig）先转 dict
     if isinstance(v, bool):
-        return "true" if v else "false"          # 关键：不能写成 Python 的 True
+        return "true" if v else "false"  # 关键：不能写成 Python 的 True
     if isinstance(v, (int, float)):
         return str(v)
     if isinstance(v, list):
@@ -472,6 +505,7 @@ def _coerce(val: Any, type_hint: Any) -> Any:
             # 自愈：历史上被误存成字符串的 dict（如 hotkey.overrides）
             try:
                 import ast
+
                 parsed = ast.literal_eval(val)
                 return parsed if isinstance(parsed, dict) else {}
             except Exception as e:
@@ -505,11 +539,12 @@ def _coerce_projects(raw: Any, current_id: Optional[str]):
         if not isinstance(open_flag, bool):
             open_flag = str(open_flag).strip().lower() in ("true", "1", "yes", "on")
         target = str(item.get("translate_target") or "").strip()
-        projects.append(ProjectConfig(id=pid, name=name, open=open_flag,
-                                      translate_target=target))
+        projects.append(
+            ProjectConfig(id=pid, name=name, open=open_flag, translate_target=target)
+        )
     if not projects:
         return [ProjectConfig()], "default"
-    if not any(p.id == "default" for p in projects):   # default 必须存在
+    if not any(p.id == "default" for p in projects):  # default 必须存在
         projects.insert(0, ProjectConfig())
     ids = {p.id for p in projects}
     if not current_id or current_id not in ids:
@@ -528,7 +563,8 @@ def _new_project_id(seen: set) -> str:
 
 def _read_toml(path: str) -> dict:
     try:
-        import tomllib                      # Python 3.11+
+        import tomllib  # Python 3.11+
+
         with open(path, "rb") as f:
             return tomllib.load(f)
     except ModuleNotFoundError:
@@ -538,6 +574,7 @@ def _read_toml(path: str) -> dict:
 def _read_minimal_toml(path: str) -> dict:
     """<3.11 回退：浅层 [section] + 标量/数组，支持 [a.b] 嵌套表，覆盖本配置足矣。"""
     import re
+
     out: Dict[str, Any] = {}
 
     def _ensure_table(d: dict, parts: list) -> dict:
@@ -565,8 +602,11 @@ def _read_minimal_toml(path: str) -> dict:
                 k, v = line.split("=", 1)
                 k, v = k.strip(), v.strip()
                 if v.startswith("[") and v.endswith("]"):
-                    parsed: Any = [x.strip().strip('"').strip("'")
-                                   for x in v[1:-1].split(",") if x.strip()]
+                    parsed: Any = [
+                        x.strip().strip('"').strip("'")
+                        for x in v[1:-1].split(",")
+                        if x.strip()
+                    ]
                 elif v.lower() in ("true", "false"):
                     parsed = v.lower() == "true"
                 elif re.fullmatch(r"-?\d+", v):

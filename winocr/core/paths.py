@@ -9,6 +9,7 @@ WinOCR2.0 的问题：每个模块各自用 os.path.dirname(os.path.abspath(__fi
   - 常规模式：配置放 ~/.winocr/（跨版本升级不丢设置）
 环境变量 WINOCR_HOME 可强制指定数据目录。
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,11 +25,11 @@ if getattr(sys, "frozen", False):
     # 打包形态（PyInstaller onedir）：项目根 = 可执行文件所在目录。
     # models/、vendor/、plugins/、config.toml 全部与 exe 同级放置，
     # 便携模式（根目录放 config.toml）在打包后天然成立，路径逻辑与源码一致。
-    _PROJECT_ROOT = Path(sys.executable).resolve().parent   # <app>（exe 所在目录）
-    _PKG_DIR = _PROJECT_ROOT / "winocr"                     # 仅兼容调用，打包后极少使用
+    _PROJECT_ROOT = Path(sys.executable).resolve().parent  # <app>（exe 所在目录）
+    _PKG_DIR = _PROJECT_ROOT / "winocr"  # 仅兼容调用，打包后极少使用
 else:
-    _PKG_DIR = Path(__file__).resolve().parent.parent       # <root>/winocr
-    _PROJECT_ROOT = _PKG_DIR.parent                         # <root>
+    _PKG_DIR = Path(__file__).resolve().parent.parent  # <root>/winocr
+    _PROJECT_ROOT = _PKG_DIR.parent  # <root>
 
 
 def package_dir() -> Path:
@@ -49,7 +50,11 @@ def is_portable() -> bool:
 def user_dir() -> Path:
     """用户数据目录（配置、历史、下载的模型）。"""
     env = os.environ.get("WINOCR_HOME")
-    p = Path(env) if env else (_PROJECT_ROOT if is_portable() else Path.home() / ".winocr")
+    p = (
+        Path(env)
+        if env
+        else (_PROJECT_ROOT if is_portable() else Path.home() / ".winocr")
+    )
     try:
         p.mkdir(parents=True, exist_ok=True)
     except OSError as e:
@@ -153,6 +158,60 @@ def argos_install_dir() -> Path:
         d = user_dir() / "models" / "argos"
         d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def llama_model_search_dirs() -> List[Path]:
+    """llama.cpp GGUF 模型搜索目录（先找到先用）。
+
+    顺序：环境变量 > 用户目录 > 项目内 models。
+    这样「下载一次，多版本共用」与「项目自带、拷走即用」两种诉求都能满足。
+    """
+    dirs: List[Path] = []
+    env = os.environ.get("WINOCR_LLAMA_MODEL_DIR")
+    if env:
+        dirs.append(Path(env))
+    dirs.append(user_dir() / "models" / "llama")
+    dirs.append(_PROJECT_ROOT / "models" / "llama")
+    return dirs
+
+
+def llama_model_dir() -> Path:
+    """GGUF 模型默认存放目录（下载器写入位置）。"""
+    d = _PROJECT_ROOT / "models" / "llama"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        d = user_dir() / "models" / "llama"
+        d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def find_llama_gguf(model_name: str = "") -> str:
+    """在搜索目录中查找 GGUF 模型文件，返回绝对路径（找不到返回空串）。
+
+    model_name 非空时优先精确匹配文件名（含/不含 .gguf 后缀均可）；
+    否则返回找到的第一个 .gguf 文件。
+    """
+    for d in llama_model_search_dirs():
+        if not d.is_dir():
+            continue
+        try:
+            entries = sorted(os.listdir(d))
+        except OSError:
+            continue
+        if model_name:
+            for f in entries:
+                full = os.path.join(str(d), f)
+                if f == model_name and os.path.isfile(full):
+                    return full
+                if f == model_name + ".gguf" and os.path.isfile(full):
+                    return full
+        for f in entries:
+            if f.lower().endswith(".gguf"):
+                full = os.path.join(str(d), f)
+                if os.path.isfile(full):
+                    return full
+    return ""
 
 
 def plugins_dir() -> Path:

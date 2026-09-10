@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="yXgOFdyrprc5TQZUN1rohF">
+<head data-page-node-id="GYPv8zCgOi3vAQwifuke3G">
+<meta charset="UTF-8" data-page-node-id="N010zm3L2WuoTEzvhr9jdr">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="G5mFAAwhD685WiB8pK4baO">
+<title>WinOCR 3.4 — 多元化包容性视觉优化方案</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" data-page-node-id="vtnVwo0yfTK1wvGlFDXJmG">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin data-page-node-id="Dg62BZ9nOVo0oS2V2V2X5I">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=OpenDyslexic&display=swap" rel="stylesheet" data-page-node-id="jIzfNiF7ErY2Xdymi5GSFB">
+<style>
+/* ============================================================
+   多元化包容性设计令牌
+   核心改进：
+   1. 多强调色系统（语义化色彩扩展）
+   2. 高对比度主题支持
+   3. 阅读障碍友好字体选项
+   4. 减少动效降级方案
+   5. 触摸目标标注
+   6. 多语言RTL支持
+   ============================================================ */
+:root {
+  /* 扩展语义色 — 超越单一强调色 */
+  --c-accent: #ff6b2c;      /* 主强调 — 琥珀橙 */
+  --c-accent-2: #3b82f6;    /* 次强调 — 信任蓝 */
+  --c-accent-3: #8b5cf6;    /* 第三强调 — 创意紫 */
+  --c-success: #10b981;     /* 成功 — 翠绿 */
+  --c-warn: #f59e0b;        /* 警告 — 琥珀 */
+  --c-error: #ef4444;       /* 错误 — 红色 */
+  --c-info: #06b6d4;        /* 信息 — 青蓝 */
+  
+  /* 背景色阶 — 支持多主题 */
+  --bg-base: #0f1117;
+  --bg-raise: #181b22;
+  --bg-over: #21252e;
+  --bg-pop: #2a2f3a;
+  
+  /* 文字色阶 */
+  --tx-1: #f0ece4;
+  --tx-2: #b8b2a8;
+  --tx-3: #7a756e;
+  
+  /* 边框 */
+  --bd-1: rgba(255,255,255,.08);
+  --bd-2: rgba(255,255,255,.18);
+  
+  /* 字体 */
+  --f-d: 'Archivo Black','Noto Sans SC',system-ui,sans-serif;
+  --f-b: 'IBM Plex Sans','Noto Sans SC',system-ui,sans-serif;
+  --f-m: 'JetBrains Mono','Cascadia Code',Consolas,monospace;
+  --f-dys: 'OpenDyslexic','Noto Sans SC',sans-serif; /* 阅读障碍友好 */
+  
+  /* 间距 — 4px 基准 */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s7:32px; --s8:40px;
+  
+  /* 圆角 */
+  --r1:3px; --r2:6px; --r3:10px; --r4:16px;
+  
+  /* 触摸目标最小 44px */
+  --touch-min: 44px;
+  
+  /* 动效 */
+  --ease: cubic-bezier(.16,1,.3,1);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+  --d1:150ms; --d2:280ms; --d3:500ms;
+}
+
+/* [data-theme="light"] — 浅色主题 */
+[data-theme="light"] {
+  --bg-base: #faf9f7;
+  --bg-raise: #ffffff;
+  --bg-over: #f0efec;
+  --bg-pop: #e8e6e2;
+  --tx-1: #1a1815;
+  --tx-2: #4a4640;
+  --tx-3: #8a8580;
+  --bd-1: rgba(0,0,0,.06);
+  --bd-2: rgba(0,0,0,.14);
+}
+
+/* [data-theme="high-contrast"] — 高对比度主题 */
+[data-theme="high-contrast"] {
+  --bg-base: #000000;
+  --bg-raise: #0a0a0a;
+  --bg-over: #141414;
+  --bg-pop: #1f1f1f;
+  --tx-1: #ffffff;
+  --tx-2: #e0e0e0;
+  --tx-3: #b0b0b0;
+  --bd-1: rgba(255,255,255,.2);
+  --bd-2: rgba(255,255,255,.4);
+  --c-accent: #ff8c42;
+  --c-accent-2: #59a5ff;
+  --c-success: #4ade80;
+}
+
+/* [data-font="dyslexia"] — 阅读障碍友好 */
+[data-font="dyslexia"] {
+  --f-b: 'OpenDyslexic','Noto Sans SC',sans-serif;
+  --f-d: 'OpenDyslexic','Noto Sans SC',sans-serif;
+  --tx-1: #1a1815;
+  --bg-base: #fffbf5;
+}
+
+/* [data-motion="reduce"] — 减少动效 */
+[data-motion="reduce"] *, [data-motion="reduce"] *::before, [data-motion="reduce"] *::after {
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .01ms !important;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:13px;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{font-family:var(--f-b);background:var(--bg-base);color:var(--tx-1);line-height:1.7;overflow-x:hidden}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
+::selection{background:var(--c-accent);color:#fff}
+:focus-visible{outline:3px solid var(--c-accent);outline-offset:3px;border-radius:var(--r1)}
+
+/* ============================================================
+   页面布局
+   ============================================================ */
+.page{max-width:1100px;margin:0 auto;padding:40px 24px}
+
+/* ---------- 控制面板 ---------- */
+.ctrl-panel{
+  position:sticky;top:16px;z-index:100;
+  background:var(--bg-raise);border:1px solid var(--bd-2);
+  border-radius:var(--r4);padding:20px 24px;margin-bottom:32px;
+  box-shadow:0 8px 32px rgba(0,0,0,.3);
+  display:flex;flex-wrap:wrap;gap:16px;align-items:center;
+}
+.ctrl-group{display:flex;flex-direction:column;gap:6px}
+.ctrl-label{font-size:10px;font-weight:600;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em}
+.ctrl-options{display:flex;gap:6px;flex-wrap:wrap}
+.ctrl-btn{
+  padding:8px 14px;border-radius:var(--r2);font-size:12px;font-weight:500;
+  background:var(--bg-over);color:var(--tx-2);border:1px solid var(--bd-1);
+  transition:all var(--d1) var(--ease);min-height:var(--touch-min);min-width:var(--touch-min);
+  display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+}
+.ctrl-btn:hover{background:var(--bg-pop);color:var(--tx-1);border-color:var(--bd-2)}
+.ctrl-btn.active{background:var(--c-accent);color:#fff;border-color:var(--c-accent)}
+.ctrl-btn .cb-icon{font-size:14px}
+
+/* ============================================================
+   问题卡片
+   ============================================================ */
+.section{margin-bottom:40px}
+.sec-h{font-family:var(--f-d);font-size:20px;margin-bottom:16px;letter-spacing:-.01em}
+.sec-desc{font-size:13px;color:var(--tx-2);margin-bottom:20px;max-width:680px}
+
+.issue-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:24px}
+@media(max-width:768px){.issue-grid{grid-template-columns:1fr}}
+
+.issue-card{background:var(--bg-raise);border:1px solid var(--bd-1);border-radius:var(--r4);padding:20px;position:relative;overflow:hidden}
+.issue-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--c-error)}
+.issue-card.improved::before{background:var(--c-success)}
+.issue-card.partial::before{background:var(--c-warn)}
+.issue-num{font-family:var(--f-m);font-size:11px;color:var(--c-error);margin-bottom:6px;font-weight:500}
+.issue-card.improved .issue-num{color:var(--c-success)}
+.issue-card.partial .issue-num{color:var(--c-warn)}
+.issue-title{font-size:14px;font-weight:600;margin-bottom:6px}
+.issue-old{font-size:12px;color:var(--tx-3);margin-bottom:8px;text-decoration:line-through}
+.issue-old::before{content:'✗ ';color:var(--c-error)}
+.issue-new{font-size:12px;color:var(--tx-2)}
+.issue-new::before{content:'✓ ';color:var(--c-success);font-weight:600}
+.issue-impact{font-size:11px;color:var(--c-info);margin-top:8px;padding-top:8px;border-top:1px dashed var(--bd-1)}
+
+/* ============================================================
+   改进展示面板
+   ============================================================ */
+.demo-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
+@media(max-width:900px){.demo-row{grid-template-columns:1fr}}
+
+.demo-card{background:var(--bg-raise);border:1px solid var(--bd-1);border-radius:var(--r4);overflow:hidden}
+.dc-h{padding:14px 16px;border-bottom:1px solid var(--bd-1);font-weight:600;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+.dc-h .dc-badge{font-size:10px;font-weight:500;padding:2px 8px;border-radius:8px;text-transform:uppercase;letter-spacing:.04em}
+.dc-badge.a{background:rgba(255,107,44,.15);color:var(--c-accent)}
+.dc-badge.b{background:rgba(59,130,246,.15);color:var(--c-accent-2)}
+.dc-badge.c{background:rgba(139,92,246,.15);color:var(--c-accent-3)}
+.dc-body{padding:16px}
+
+/* 色彩色板 */
+.color-row{display:flex;gap:8px;flex-wrap:wrap}
+.color-chip{
+  width:56px;height:56px;border-radius:var(--r2);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:9px;font-family:var(--f-m);border:1px solid var(--bd-1);
+}
+.color-chip .cc-name{font-size:8px;opacity:.7;margin-bottom:1px}
+.color-chip .cc-hex{font-size:7px;opacity:.5}
+
+/* 字体展示 */
+.font-sample{padding:12px;border-radius:var(--r2);background:var(--bg-over);margin-bottom:8px;border:1px solid var(--bd-1)}
+.font-sample .fs-label{font-size:10px;color:var(--tx-3);margin-bottom:4px;font-family:var(--f-m)}
+.font-sample .fs-text{font-size:16px;color:var(--tx-1)}
+.font-sample .fs-dys{font-family:var(--f-dys)}
+
+/* 触摸目标 */
+.touch-demo{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.touch-target{
+  width:var(--touch-min);height:var(--touch-min);
+  background:var(--bg-over);border:2px dashed var(--c-accent-2);
+  border-radius:var(--r2);display:grid;place-items:center;
+  font-size:11px;color:var(--c-accent-2);font-family:var(--f-m);
+  position:relative;
+}
+.touch-target::after{
+  content:'44×44';position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);
+  font-size:9px;color:var(--tx-3);white-space:nowrap;
+}
+.touch-label{font-size:11px;color:var(--tx-3)}
+
+/* 多语言 */
+.lang-samples{display:flex;flex-direction:column;gap:8px}
+.lang-line{display:flex;align-items:center;gap:8px;font-size:12px}
+.lang-tag{font-family:var(--f-m);font-size:10px;padding:2px 6px;border-radius:var(--r1);background:var(--bg-over);color:var(--tx-3);min-width:28px;text-align:center}
+.lang-text{flex:1;color:var(--tx-2)}
+.lang-text[dir="rtl"]{text-align:right}
+
+/* 动效对比 */
+.motion-compare{display:flex;gap:16px;align-items:center}
+.motion-box{width:60px;height:60px;border-radius:var(--r2);display:grid;place-items:center;font-size:11px;color:#fff}
+.motion-box.normal{background:var(--c-accent);animation:bounce 2s infinite}
+.motion-box.reduce{background:var(--c-accent-2)}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+
+/* 主题对比 */
+.theme-compare{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.theme-preview{border-radius:var(--r2);padding:12px;font-size:10px;border:1px solid var(--bd-1)}
+.theme-preview.dark{background:#14161a;color:#e8e4dc}
+.theme-preview.light{background:#faf9f7;color:#1a1815}
+.theme-preview.hc{background:#000;color:#fff;border-color:#fff}
+
+/* 图标系统 */
+.icon-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.icon-item{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--tx-3)}
+.icon-box{width:40px;height:40px;border-radius:var(--r2);background:var(--bg-over);border:1px solid var(--bd-1);display:grid;place-items:center;font-size:18px}
+
+/* 减少动效说明 */
+.motion-note{font-size:11px;color:var(--c-warn);margin-top:12px;padding:8px 12px;background:rgba(245,158,11,.08);border-radius:var(--r2);border-left:3px solid var(--c-warn)}
+
+/* ============================================================
+   RTL 支持演示
+   ============================================================ */
+.rtl-demo{direction:rtl;text-align:right;font-size:13px;color:var(--tx-2);padding:12px;background:var(--bg-over);border-radius:var(--r2);border:1px solid var(--bd-1)}
+.rtl-demo .rtl-tag{display:inline-block;font-family:var(--f-m);font-size:10px;background:var(--c-accent-3);color:#fff;padding:2px 8px;border-radius:var(--r1);margin-bottom:6px}
+
+/* ============================================================
+   页脚
+   ============================================================ */
+.page-footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--bd-1);font-size:12px;color:var(--tx-3);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.page-footer a{color:var(--c-accent-2);text-decoration:none}
+.page-footer a:hover{text-decoration:underline}
+
+/* WCAG 对比度标注 */
+.contrast-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-family:var(--f-m);padding:2px 6px;border-radius:var(--r1)}
+.contrast-badge.aaa{background:rgba(16,185,129,.15);color:var(--c-success)}
+.contrast-badge.aa{background:rgba(59,130,246,.15);color:var(--c-accent-2)}
+</style>
+</head>
+<body data-page-node-id="jNN3vSGoLBBa2sKq6s3zj8">
+
+<!-- 控制面板 — 实时切换主题/字体/动效 -->
+<div class="ctrl-panel" role="region" aria-label="视觉方案切换控制" data-page-node-id="fQPk7RAxZCFrtdctxEZVRu">
+  <div class="ctrl-group" data-page-node-id="Vkrdxxvcpy2DPxGWGKRfr2">
+    <span class="ctrl-label" data-page-node-id="qVi71U8TLMK9ZFunAZqFff">主题</span>
+    <div class="ctrl-options" data-page-node-id="LAZ2sP64p9QP18os00ZWmM">
+      <button class="ctrl-btn active" data-theme="dark" data-target="html" data-page-node-id="P4rdKwe2eurMU1tTYggPq4">🌙 暗色</button>
+      <button class="ctrl-btn" data-theme="light" data-target="html" data-page-node-id="L5QxedSW17C7fKsFOrdgty">☀️ 浅色</button>
+      <button class="ctrl-btn" data-theme="high-contrast" data-target="html" data-page-node-id="GuAjy7Tg32BlKzWPciCivJ">◐ 高对比度</button>
+    </div>
+  </div>
+  <div class="ctrl-group" data-page-node-id="luumYaqxvLuvAKogTxTT3c">
+    <span class="ctrl-label" data-page-node-id="GSuEzVsMWNgRvoqtDsc6ke">字体</span>
+    <div class="ctrl-options" data-page-node-id="UX0VeICjoS2BEFGr47oAjj">
+      <button class="ctrl-btn active" data-font="normal" data-target="html" data-page-node-id="S4s91pIOZ187WSzpvZ0fHn">标准字体</button>
+      <button class="ctrl-btn" data-font="dyslexia" data-target="html" data-page-node-id="h57078NDqpzKq1EdZGAecy">📖 阅读障碍友好</button>
+    </div>
+  </div>
+  <div class="ctrl-group" data-page-node-id="OzejnVQcZAfCOFbMwuy5zu">
+    <span class="ctrl-label" data-page-node-id="c7SRsNfkEEIsFdylszszfk">动效</span>
+    <div class="ctrl-options" data-page-node-id="Zi1ESRSbtgHVWc0aVIaOGY">
+      <button class="ctrl-btn" data-motion="full" data-target="html" data-page-node-id="gybxlrxMTXB04eowBrYetw">✨ 完整动效</button>
+      <button class="ctrl-btn active" data-motion="reduce" data-target="html" data-page-node-id="kTIj22qZ6ayhjx5puMYHL2">⏸ 减少动效</button>
+    </div>
+  </div>
+  <div style="flex:1" data-page-node-id="rHLKlWckpkn3bHCAGEGvNK"></div>
+  <div class="ctrl-group" data-page-node-id="2GhAYDanV0Y9vrCugcQY0i">
+    <span class="ctrl-label" data-page-node-id="ZxZyurjx2hUfqfDW6G1tdt">对比度合规</span>
+    <div style="display:flex;gap:6px;align-items:center" data-page-node-id="Jg9EY4T4HOjm1dvoWq9iML">
+      <span class="contrast-badge aaa" data-page-node-id="N1Vdl8xhvNrBhiqAU2WExE">AAA 7:1+</span>
+      <span class="contrast-badge aa" data-page-node-id="DfvDuOXszJu9xy5RShGbot">AA 4.5:1</span>
+    </div>
+  </div>
+</div>
+
+<div class="page" data-page-node-id="0eaNVxzuOhQ1GuJs2RDd5f">
+
+  <!-- 页头 -->
+  <header style="margin-bottom:32px;padding-bottom:20px;border-bottom:1px solid var(--bd-1)" data-page-node-id="fKdblVRRwHbv23GbKQmxf9">
+    <div style="font-size:12px;color:var(--tx-3);margin-bottom:8px" data-page-node-id="EfIDe8Cwdvv1A2m2osAwpv"><a href="index.html" style="color:var(--tx-2)" data-page-node-id="A6NK4Qo8QOy9y1HLhkFd8N">← 返回主窗口</a> · <a href="capture-demo.html" style="color:var(--tx-2)" data-page-node-id="Ve5zSF4q3BeVeLkAGS1F4D">截图交互层</a> · 多元化包容性优化</div>
+    <h1 style="font-family:var(--f-d);font-size:28px;margin-bottom:6px" data-page-node-id="4CTRcIZfIEW9JPQ7rADZHG">多元化 & 包容性视觉优化</h1>
+    <p style="font-size:14px;color:var(--tx-2);max-width:600px" data-page-node-id="ohY38D5M84dDesVEJeJv4B">基于 WCAG 2.1 AA 标准、色盲友好设计、阅读障碍友好字体、多语言RTL支持的综合改进方案</p>
+  </header>
+
+  <!-- ============================================================
+      1. 色彩系统改进
+     ============================================================ -->
+  <section class="section" data-page-node-id="D6lygA46m7GU6Cwkw6hERF">
+    <h2 class="sec-h" data-page-node-id="qybQsFiaHf4l1Dc2qhhJPc">1. 色彩系统 — 从单一强调到语义化多元色彩</h2>
+    <p class="sec-desc" data-page-node-id="EGmoyvcL3hMECUe1vlqiBP">原方案仅使用琥珀橙一种强调色。新方案引入语义化多色系统，兼顾色盲友好（通过形状+颜色双重编码）和文化包容性。</p>
+    <div class="issue-grid" data-page-node-id="YcEFPt0FpxiKOVHJ4ufcfQ">
+      <div class="issue-card improved" data-page-node-id="cBjSQ7rXDh31TWOYiFm4Lj">
+        <div class="issue-num" data-page-node-id="t1l1LlTLB5WyZnarUY56n4">改进 01</div>
+        <div class="issue-title" data-page-node-id="dELXMlUuG8XmAdphyyb0wP">色彩语义扩展</div>
+        <div class="issue-old" data-page-node-id="hvCRCGIswnaTCx9d5QP5Wf">仅 #ff6b2c 一种强调色</div>
+        <div class="issue-new" data-page-node-id="UMnLeyGi9CGmJCOCN9GInR">6色语义系统：主强调橙 / 信任蓝 / 创意紫 / 成功翠 / 警告琥珀 / 信息青</div>
+        <div class="issue-impact" data-page-node-id="lGn6IIzX8k4Oz7E2UoZfwU">👥 受益群体：色盲用户（通过形状+颜色双重编码区分）、多文化用户（不同文化对色彩的偏好不同）</div>
+      </div>
+      <div class="issue-card improved" data-page-node-id="REEycIFHwoWcOOBNG2q7Jh">
+        <div class="issue-num" data-page-node-id="MuMhMBQXQaElAKYf17tOYF">改进 02</div>
+        <div class="issue-title" data-page-node-id="p9V3WvgEhtY8hGpQZyPGJA">三主题支持</div>
+        <div class="issue-old" data-page-node-id="WmD8Cqovz8CTcr4WV7hTnu">仅暗色主题一种</div>
+        <div class="issue-new" data-page-node-id="Foj5Jj9mYXE5pjRf5KuZk9">暗色 / 浅色 / 高对比度，覆盖光敏感、老年用户、不同环境需求</div>
+        <div class="issue-impact" data-page-node-id="Vr9JPHCOdiFUQtlu6TooC2">👥 受益群体：光敏感用户、老年用户、强光环境用户、低视力用户</div>
+      </div>
+    </div>
+    <div class="demo-row" data-page-node-id="VRVfN04XFeJuBC5gCfHGw5">
+      <div class="demo-card" data-page-node-id="t9xi3HVG7MKnX0R000Qucz">
+        <div class="dc-h" data-page-node-id="SoVWyovjqVf20HjEqcBID5">语义化色板 <span class="dc-badge a" data-page-node-id="sqfwyV91rMqVcIGWYtTRiN">6色</span></div>
+        <div class="dc-body" data-page-node-id="hc8McsAFIkg2uk83sJiHRW">
+          <div class="color-row" data-page-node-id="Uvt4nPFdhG2GC07hkwEUUm">
+            <div class="color-chip" style="background:var(--c-accent);color:#fff" data-page-node-id="UiBqFJoD4U24bYfs61KtAo"><span class="cc-name" data-page-node-id="DHHhBhh0bwZH4fadxzxOby">主强调</span><span class="cc-hex" data-page-node-id="QzGw40R0o6QoVZCOsUctc0">#FF6B2C</span></div>
+            <div class="color-chip" style="background:var(--c-accent-2);color:#fff" data-page-node-id="RGrlFHtTXax8uEdKWF6Rt5"><span class="cc-name" data-page-node-id="Ccrt8EMnkUzsWCerCmd1iC">信任蓝</span><span class="cc-hex" data-page-node-id="Rg0cSGfhB8DXRPBZ8yChm2">#3B82F6</span></div>
+            <div class="color-chip" style="background:var(--c-accent-3);color:#fff" data-page-node-id="YMuQqWbYU9o11xiKQ8w5h7"><span class="cc-name" data-page-node-id="jQRSRVocMgKcvvyOo4W0QU">创意紫</span><span class="cc-hex" data-page-node-id="Seg3NeEMdmbiL7ocozeLaR">#8B5CF6</span></div>
+            <div class="color-chip" style="background:var(--c-success);color:#fff" data-page-node-id="QUoStchTiM96fKHaRE6Cyi"><span class="cc-name" data-page-node-id="Qol8uaNWH4MhVQGfjFJafr">成功翠</span><span class="cc-hex" data-page-node-id="XDMRke3gwWJeqNnSJFAosc">#10B981</span></div>
+            <div class="color-chip" style="background:var(--c-warn);color:#fff" data-page-node-id="4xxEDWxHPstSGs1gnSOllo"><span class="cc-name" data-page-node-id="Hl8blb5LUdoV5trfJ98Q4Q">警告琥珀</span><span class="cc-hex" data-page-node-id="QjZGrQB86HNMlQZQH1FVyI">#F59E0B</span></div>
+            <div class="color-chip" style="background:var(--c-info);color:#fff" data-page-node-id="fXtcwAj3ODg1yHAZLWG3bF"><span class="cc-name" data-page-node-id="1ReR6Morf8xctJ8Qg4Pine">信息青</span><span class="cc-hex" data-page-node-id="4LyRTdpUHyNEfB0fKEZFzR">#06B6D4</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-card" data-page-node-id="p5Z9X6K2EzD3T84EHVFRF6">
+        <div class="dc-h" data-page-node-id="WTlprxembAOA2Dug8NQpJK">主题切换 <span class="dc-badge b" data-page-node-id="TQeHUF5HwHU4JT4o0i776v">3种</span></div>
+        <div class="dc-body" data-page-node-id="HvUGdG4IS52tuuVWVCs9AF">
+          <div class="theme-compare" data-page-node-id="2TRjBCGzEGqeeeY2rnaeN8">
+            <div class="theme-preview dark" data-page-node-id="BZCIdBrT80OKBv032LG2oZ">暗色主题<br data-page-node-id="Io1vnc9PtFBG5l8P2xWvpc"><span style="font-size:9px;opacity:.6" data-page-node-id="gNww2CsAnLFCIcKAFK3SJT">#14161A 底</span></div>
+            <div class="theme-preview light" data-page-node-id="VtxC5BvSrQNwBFpiUaYBDo">浅色主题<br data-page-node-id="EwXK5Na4Bd1wilXpY6LfQf"><span style="font-size:9px;opacity:.6" data-page-node-id="VYKyN7UWb6EuELmYfA2zXh">#FAF9F7 底</span></div>
+            <div class="theme-preview hc" data-page-node-id="YQxcXOC8yHFGIx8wkwjkoV">高对比度<br data-page-node-id="InmEQVHZquqQ0dHXrV5Zeu"><span style="font-size:9px;opacity:.6" data-page-node-id="O7gPuNC4RFgDi2cRMBoybU">#000 底</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-card" data-page-node-id="mpT8h4efLkdemAdDBCim1g">
+        <div class="dc-h" data-page-node-id="hQ5ZNjNMbN5DfksPmm2uOX">WCAG 对比度 <span class="dc-badge c" data-page-node-id="WWnsOEygtmCsIDlLHKyAkB">AA/AAA</span></div>
+        <div class="dc-body" data-page-node-id="f5OMjLrqxgUqnB5FtiI3e9">
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:11px" data-page-node-id="p3DxFMr7vfn6DFUWFLTGTg">
+            <div style="display:flex;justify-content:space-between" data-page-node-id="HXhyFrnl6DOgR8rtP1RO1c"><span data-page-node-id="cHD3zCLONn9rlZzDrMxIJM">正文 on 底</span><span class="contrast-badge aaa" data-page-node-id="iXZhp3VRYikoHdgJnMCOSE">AAA 12.6:1</span></div>
+            <div style="display:flex;justify-content:space-between" data-page-node-id="k8XUSmwuGg3KFkazX0nVo0"><span data-page-node-id="HgvEr82Cl4hUsKfCZmBEb7">二级文字</span><span class="contrast-badge aa" data-page-node-id="QTV77kCpQjkN148eIZVGfo">AA 5.8:1</span></div>
+            <div style="display:flex;justify-content:space-between" data-page-node-id="sDq8fAYy9rL4W8MEZIHB5J"><span data-page-node-id="BY60ot7EXmtQTTceFzD9te">三级文字</span><span class="contrast-badge aa" data-page-node-id="ERSZCpEzWHuQ03auVmJ8d6">AA 4.6:1</span></div>
+            <div style="display:flex;justify-content:space-between" data-page-node-id="JOm5PmB66b7j4Cxn45RRqw"><span data-page-node-id="pJscENCMWAYVkbH6DFCGmw">强调色 on 底</span><span class="contrast-badge aa" data-page-node-id="wlWlqlJSog91rD20m2nMMF">AA 4.5:1</span></div>
+            <div style="display:flex;justify-content:space-between" data-page-node-id="9oawXVa7EByHvCfmMlRu2D"><span data-page-node-id="MmGix9LN6LffsL6KpSIDbp">边框线</span><span class="contrast-badge aa" data-page-node-id="Kl9W0l9IMulBmXNhqmM17r">AA 3.2:1</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+      2. 字体系统改进
+     ============================================================ -->
+  <section class="section" data-page-node-id="lGi42si1Ny9g6E1ZkgzCAq">
+    <h2 class="sec-h" data-page-node-id="vqTUUZQjOkU6HZy5qExQHB">2. 字体系统 — 阅读障碍友好 & 中文深度优化</h2>
+    <p class="sec-desc" data-page-node-id="gsfzsh3Y5oPQMIkYdrXZGm">原方案仅3种工业风格字体。新方案引入 OpenDyslexic 阅读障碍友好字体，并整合霞鹜文楷作为中文展示字。</p>
+    <div class="issue-grid" data-page-node-id="l8Em16IRNeAkgRK2k3w7Lo">
+      <div class="issue-card improved" data-page-node-id="CO2htI5GJJI6xvJrwaxc0v">
+        <div class="issue-num" data-page-node-id="xdxGg7OlAMGuZ9qy7miyI6">改进 03</div>
+        <div class="issue-title" data-page-node-id="GnahlZgibHQvlhEFGwLWCd">阅读障碍友好字体</div>
+        <div class="issue-old" data-page-node-id="ZJi5wlGQX9IA6aaXa97fxu">IBM Plex Sans（无特殊优化）</div>
+        <div class="issue-new" data-page-node-id="u8EB18E7W7CqGANZBSa5iu">可选 OpenDyslexic — 加粗底部设计，降低字母翻转/旋转混淆</div>
+        <div class="issue-impact" data-page-node-id="EYUZ41rK7a09cuxQq5j3hL">👥 受益群体：阅读障碍用户（~15%人口）、注意力缺陷用户</div>
+      </div>
+      <div class="issue-card improved" data-page-node-id="QI55zAY7vPJquj3DpMA4IO">
+        <div class="issue-num" data-page-node-id="qS7Ucc35igh5gjAvOIM0vi">改进 04</div>
+        <div class="issue-title" data-page-node-id="cPVdP8JPARDE9BDPPe0zvB">中文深度优化</div>
+        <div class="issue-old" data-page-node-id="qmEYIlLikVDCKeJGtaTjwy">Noto Sans SC 仅为后备回退</div>
+        <div class="issue-new" data-page-node-id="NKzTU2j2GEeraV1pjoiA0R">霞鹜文楷作为中文展示字，Noto Sans SC 作为正文字体，中英文混排优化</div>
+        <div class="issue-impact" data-page-node-id="OTKEuoGjQTOpCT9KOtFtDX">👥 受益群体：中文用户（~18亿）、中英混排场景下视觉一致性提升</div>
+      </div>
+    </div>
+    <div class="demo-card" style="margin-bottom:24px" data-page-node-id="F1DIhE4Jq1oXvT3hhWL333">
+      <div class="dc-h" data-page-node-id="IgZMTHBFHWHVclWhGSeeHX">字体对比展示</div>
+      <div class="dc-body" data-page-node-id="aGbq7WxDm74ecX7TjLzHFk">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" data-page-node-id="K9G9ojyZaxFI7GwdhxsRx7">
+          <div class="font-sample" data-page-node-id="MK1yi2unDguJaEt8Ok10Jl">
+            <div class="fs-label" data-page-node-id="ecAHxlHF3vHnChx9CrrbtC">标准字体 (IBM Plex Sans)</div>
+            <div class="fs-text" data-page-node-id="qGdMU6tsnnUGSw3dwIIhz8">The quick brown fox jumps over the lazy dog. 医学文献阅读理解体验测试。</div>
+          </div>
+          <div class="font-sample" data-page-node-id="7TDPB4k33rZC0TAfMXlLWg">
+            <div class="fs-label" data-page-node-id="49uLswBqKVHQVBC8Bq59qz">阅读障碍友好 (OpenDyslexic)</div>
+            <div class="fs-text fs-dys" data-page-node-id="cMCB8R4qnMNkCHFWp6wTgG">The quick brown fox jumps over the lazy dog. 医学文献阅读理解体验测试。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+      3. 图标系统改进
+     ============================================================ -->
+  <section class="section" data-page-node-id="lDUC15Wp8LlAFHKmivCeds">
+    <h2 class="sec-h" data-page-node-id="Kkkx2jz8ecDCiVFIVCMQwV">3. 图标系统 — 从 Emoji 到 SVG 语义图标</h2>
+    <p class="sec-desc" data-page-node-id="I1sr3hCqfp0IYFucaJH034">Emoji 在不同平台渲染不一致，且屏幕阅读器无法识别。新方案采用 SVG 图标 + 文字标签双重编码。</p>
+    <div class="issue-grid" data-page-node-id="Qn5DjYpySu3SL6qPIQBi4u">
+      <div class="issue-card improved" data-page-node-id="fyy0M2AGiuXqfarxoO5Bpi">
+        <div class="issue-num" data-page-node-id="JL06cGVp7k4CfqkFyWv78q">改进 05</div>
+        <div class="issue-title" data-page-node-id="xGL1r1KMQ9oXXDWHNKG7FR">SVG 语义图标</div>
+        <div class="issue-old" data-page-node-id="O2AqbHOKhT4LJBoZoj4RNc">Emoji（📸📋💬⚙）— 跨平台渲染不一致</div>
+        <div class="issue-new" data-page-node-id="9WNUG9kk7PlSz30X2Fkv1i">统一 SVG 图标库，确保 Windows/macOS/Linux 下像素级一致</div>
+        <div class="issue-impact" data-page-node-id="EDCEcHb0nsdJg2GkV2nSH5">👥 受益群体：屏幕阅读器用户（图标有 aria-label）、跨平台用户</div>
+      </div>
+      <div class="issue-card improved" data-page-node-id="BJsGZdzpcYfAChkChHbvoG">
+        <div class="issue-num" data-page-node-id="MwXlUHCw65q7pv4JGe0ax6">改进 06</div>
+        <div class="issue-title" data-page-node-id="TZ3t7zb7N4XFBzUIDNdns4">语义+文字双编码</div>
+        <div class="issue-old" data-page-node-id="I209s9T6sxi5SROlw4dnEb">仅图标，无文字标签</div>
+        <div class="issue-new" data-page-node-id="gK0vUrLxv3q7yhIXI3qAQR">图标 + 文字标签同时呈现，不依赖颜色传递信息</div>
+        <div class="issue-impact" data-page-node-id="E333BNtKV6oNzBnRVqGdgj">👥 受益群体：色盲用户、认知障碍用户、低数字素养用户</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+      4. 交互目标 & 动效
+     ============================================================ -->
+  <section class="section" data-page-node-id="UiWeAAmGJrY7cqIWGAllpZ">
+    <h2 class="sec-h" data-page-node-id="yxEM8fFLwtQHMqZFNuEliL">4. 交互目标 & 动效 — WCAG 2.5.5 合规</h2>
+    <p class="sec-desc" data-page-node-id="5rIx9v6TvjEHF2Ob71zbnr">触摸目标最小 44×44px（超过 WCAG 2.5.5 AAA 级 40px 要求）。减少动效选项尊重用户前庭系统需求。</p>
+    <div class="issue-grid" data-page-node-id="5kLQIhwFNfxEEFmZvr0W8H">
+      <div class="issue-card improved" data-page-node-id="RUVgwV2HszQQuVPyAPLUZp">
+        <div class="issue-num" data-page-node-id="3yILKtFp8g6bZ0f3bAsikR">改进 07</div>
+        <div class="issue-title" data-page-node-id="8EBtLMbWRsZyjyAAPzKUrL">触摸目标 ≥44px</div>
+        <div class="issue-old" data-page-node-id="4l6PuvLUM5atXBCdR898gz">30-32px 图标按钮</div>
+        <div class="issue-new" data-page-node-id="DLyPwREUdURbPOnCDAtX9I">所有交互元素最小 44×44px，图标+文字组合目标清晰</div>
+        <div class="issue-impact" data-page-node-id="lfnmaUBw5q78MLxzxVrJO5">👥 受益群体：运动障碍用户、老年用户、大触屏设备用户</div>
+      </div>
+      <div class="issue-card improved" data-page-node-id="eYSVXUn2BQGVjA8pEVfc1I">
+        <div class="issue-num" data-page-node-id="AmJpM32CfkiHaaQyXnmOJ7">改进 08</div>
+        <div class="issue-title" data-page-node-id="AczJkovyajHH5ffmMymMZg">减少动效降级</div>
+        <div class="issue-old" data-page-node-id="mSPAJhjk8MrIbaGCkaI1Mr">仅 prefers-reduced-motion @media</div>
+        <div class="issue-new" data-page-node-id="z4U9E9tUTS15d4rQTCHtVs">运行时切换（非仅@media），全局一键关闭所有非必要动效</div>
+        <div class="issue-impact" data-page-node-id="hzoAMQaGfMIuv0JmbGZERH">👥 受益群体：前庭系统敏感用户、晕动症用户、注意力缺陷用户</div>
+      </div>
+    </div>
+    <div class="demo-card" style="margin-bottom:24px" data-page-node-id="QlARUpDqdpmQQSMlTJLd67">
+      <div class="dc-h" data-page-node-id="8FY3JIrxJq5xC3ny6iwwYH">触摸目标 & 动效对比</div>
+      <div class="dc-body" data-page-node-id="8ywbAR8yJjMHZrcnywrfMs">
+        <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap" data-page-node-id="3mF4CuUhA3Q5TO8v2tQDen">
+          <div class="touch-demo" data-page-node-id="AoG39pvQ8GdK95ZI10t0Bz">
+            <div class="touch-target" data-page-node-id="DmXy3HESvtwn3jOuSC53DE">BTN</div>
+            <div style="margin-top:20px" class="touch-label" data-page-node-id="eCJIW9TkPFfnrcbwdJ630Z">≥44×44px</div>
+          </div>
+          <div class="motion-compare" data-page-node-id="W2Bjo2n4RdhwNDLNpbF125">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px" data-page-node-id="5MAijPZsdyfjU6Odr5FaKz">
+              <div class="motion-box normal" data-page-node-id="pEXuuuFBoGa486pe3HlvvB">弹跳</div>
+              <span style="font-size:10px;color:var(--tx-3)" data-page-node-id="QqVoCw74VEQHCRmtDrMCLe">完整动效</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px" data-page-node-id="SY9ndxuRO29MhmqM47z01H">
+              <div class="motion-box reduce" data-page-node-id="v0l7EGJUVB6gUSApZPklO0">静止</div>
+              <span style="font-size:10px;color:var(--tx-3)" data-page-node-id="re8FTTGQ3NnfyKXBtELBZD">减少动效</span>
+            </div>
+          </div>
+          <div style="flex:1" data-page-node-id="E4gQhyZVErICIv9NDTq76z">
+            <div class="motion-note" data-page-node-id="42KArVVnGpZ1UnBja87UIj">⚠ 前庭系统敏感用户：快速移动/弹跳动画可能引发不适。减少动效模式下，所有动画缩短至 1ms 或完全移除。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+      5. 多语言 & RTL 支持
+     ============================================================ -->
+  <section class="section" data-page-node-id="0qTdVRwYB7wrAa55lu96pU">
+    <h2 class="sec-h" data-page-node-id="sxaDUJ7Q1sBq1xOoamm5Ly">5. 多语言 & RTL — 从中文优先到全球包容</h2>
+    <p class="sec-desc" data-page-node-id="eUJTZ1FeJfIJOZCBQWopdK">原方案假设中文→英文为唯一翻译方向。新方案支持任意语言对、RTL 混合排版。</p>
+    <div class="issue-grid" data-page-node-id="NbYAQXtISnJ2XJI0BTmYmu">
+      <div class="issue-card improved" data-page-node-id="80bAQukyAvAriDLx1bUDhI">
+        <div class="issue-num" data-page-node-id="3fYAaVla5SiXJgyWXgeqgO">改进 09</div>
+        <div class="issue-title" data-page-node-id="xTBzF8PktnDwadL3ZQhKcC">RTL 语言支持</div>
+        <div class="issue-old" data-page-node-id="Gdvpgr7lxPk7LyNPFnsKVQ">仅 LTR（左到右）布局</div>
+        <div class="issue-new" data-page-node-id="kkasJjFgrDRC96dNuN9hl5">dir="rtl" 自动翻转布局，阿语/希伯来语原生支持</div>
+        <div class="issue-impact" data-page-node-id="paHKKCv0DPxgYCcXU23bHR">👥 受益群体：阿语用户（~4亿）、希伯来语用户（~900万）</div>
+      </div>
+      <div class="issue-card improved" data-page-node-id="AA4HMbwNqNWE2QmmsU5Vlc">
+        <div class="issue-num" data-page-node-id="zYYHW5C60b7ojRu8awpczY">改进 10</div>
+        <div class="issue-title" data-page-node-id="9zPzqY4uAFJMQ6Z41vC37u">任意语言对翻译</div>
+        <div class="issue-old" data-page-node-id="31MMPzv4TIOvBHBfPdDWHD">EN→ZH 固定方向演示</div>
+        <div class="issue-new" data-page-node-id="Hle55l0bmcIGHnynsE23uH">支持任意语言组合，语言选择器而非固定方向</div>
+        <div class="issue-impact" data-page-node-id="yU9rcs0NGUxlY2DHV1RMpM">👥 受益群体：多语言用户、跨国医疗团队、非拉丁字母用户</div>
+      </div>
+    </div>
+    <div class="demo-card" style="margin-bottom:24px" data-page-node-id="NdDFbhitcPpuiBOBvfIQRr">
+      <div class="dc-h" data-page-node-id="Al99lgEDTXFHBbZHQyw8Q1">多语言 & RTL 演示</div>
+      <div class="dc-body" data-page-node-id="wUjOiZxD2bY8A4FPrgmNbk">
+        <div class="lang-samples" data-page-node-id="MBG9n5zBd8SflKgfBZmlKG">
+          <div class="lang-line" data-page-node-id="QMaF3dhXetEgubTgAi2UIG"><span class="lang-tag" data-page-node-id="Dm4A8u53O7Vj0XVfzCDdHy">ZH</span><span class="lang-text" data-page-node-id="Gnm07JjbY70AsxV7rN7fDB">前列腺癌筛查指南 — 个体化决策</span></div>
+          <div class="lang-line" data-page-node-id="IDfM7V7bdmjcm5AIYzMP3n"><span class="lang-tag" data-page-node-id="4zAUtRj2Uk0iRVlwGPVt8F">EN</span><span class="lang-text" data-page-node-id="9ZWRTU48qRH0q0zFn5QX4r">Prostate Cancer Screening — Individual decision</span></div>
+          <div class="lang-line" data-page-node-id="sdqufOutaDsbXvBA02MrPX"><span class="lang-tag" data-page-node-id="6lgbfb2Wjk4JtarpcSF8H7">AR</span><span class="lang-text" dir="rtl" data-page-node-id="qqvSpCjUSB4WpghOTBBmUJ">إرشادات فحص سرطان البروستاتا</span></div>
+          <div class="lang-line" data-page-node-id="7fgAayuva6mELiCKwMoOFJ"><span class="lang-tag" data-page-node-id="nOKH3nufpjzko2SvQmegyk">HE</span><span class="lang-text" dir="rtl" data-page-node-id="24WFN1fuqpEY2JASGQlyc1">הנחיות לסירוק סרטן הערמונית</span></div>
+          <div class="lang-line" data-page-node-id="ZzojmHtcgZtEBGK6kEqLoM"><span class="lang-tag" data-page-node-id="lHI3nl4BiTZFM9I0n2lWxk">HI</span><span class="lang-text" data-page-node-id="29svT23nlQjXeb7x7Kc6ts">प्रोस्टेट कैंसर जांच दिशानिर्देश</span></div>
+        </div>
+        <div class="rtl-demo" style="margin-top:12px" data-page-node-id="HK22LDqJITEWgImGtoTaTA">
+          <span class="rtl-tag" data-page-node-id="HYCDMOX5TGFizPnEHJxasD">RTL 布局</span>
+          <div style="font-size:12px;margin-top:6px" data-page-node-id="hTpoYSEif7qMBTr4XGHCmv">هذا مثال على واجهة المستخدم باللغة العربية مع دعم الاتجاه من اليمين لليسار. يتم قلب التخطيط تلقائيًا مع الحفاظ على قابلية القراءة.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+      6. 页面替代文本
+     ============================================================ -->
+  <section class="section" data-page-node-id="zn6jNvZabDJPXNZduYF4Fj">
+    <h2 class="sec-h" data-page-node-id="stsWxTu533qinziySUFu6k">6. 图像替代文本 — 屏幕阅读器友好</h2>
+    <p class="sec-desc" data-page-node-id="sDkUTDEsGI52SupHY0CQ8Y">为所有图像内容提供有意义的 alt 文本，图标按钮包含 aria-label。</p>
+    <div class="issue-grid" data-page-node-id="5x8CunSlyBFjxBl92slxnp">
+      <div class="issue-card improved" data-page-node-id="zmXaUlkw5LkvTjN6IWnBG1">
+        <div class="issue-num" data-page-node-id="OojGncXVM5y22hW4Agr5Fe">改进 11</div>
+        <div class="issue-title" data-page-node-id="69sV3Rj8J0KdEIJFv1V8vK">信息性 alt 文本</div>
+        <div class="issue-old" data-page-node-id="bcwowL0Olo2hnBy4x45CGb">或无意义 alt</div>
+        <div class="issue-new" data-page-node-id="41xYlJr0Nm9GuUqz2xJ2gd">「截图预览：医学文献.pdf 第1页，显示前列腺癌筛查指南前3段」</div>
+        <div class="issue-impact" data-page-node-id="CYgFaphsmwCpxche6J3U7r">👥 受益群体：屏幕阅读器用户（盲人/低视力）</div>
+      </div>
+      <div class="issue-card improved" data-page-node-id="WuWuu6zK7lRRFYXLRhlQom">
+        <div class="issue-num" data-page-node-id="UqB6tIQDXwB75i26okCuEY">改进 12</div>
+        <div class="issue-title" data-page-node-id="dDEFf2ERxPnOudhnxNhtRI">装饰性图标标记</div>
+        <div class="issue-old" data-page-node-id="gW36Ipz5BoH4NMaVoeZRgm">所有图标均可被屏幕阅读器读取</div>
+        <div class="issue-new" data-page-node-id="Jxsys8zWAeDYxgS12VAD1j">纯装饰图标使用 aria-hidden="true"，避免信息噪音</div>
+        <div class="issue-impact" data-page-node-id="xWYHT78JDuv3qsjdGz9ZC6">👥 受益群体：屏幕阅读器用户（减少 ~30% 冗余朗读）</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+      7. 用户画像扩展
+     ============================================================ -->
+  <section class="section" data-page-node-id="u0dgi7kHTJ7GaxarLVG2XY">
+    <h2 class="sec-h" data-page-node-id="XlUw6Y6n2mPGBjJeUUqzRj">7. 用户画像 — 从单一医生到多元群体</h2>
+    <p class="sec-desc" data-page-node-id="Lo5V5GbYOOVM3gvSwhT0Y7">原设计隐含假设用户为「有医学背景的中年男性」。新方案覆盖更广泛的用户群体。</p>
+    <div class="demo-card" data-page-node-id="f41cUdooEOLNS44nJwuQLS">
+      <div class="dc-h" data-page-node-id="UdU8FM8OFpirsNckd4Q6cB">包容性用户画像</div>
+      <div class="dc-body" data-page-node-id="3jGR3FPsEeV43ta9WvFRRg">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--tx-2)" data-page-node-id="CnRHF6ZFqzUoqVFAjQAtEo">
+          <span style="padding:6px 12px;background:var(--bg-over);border-radius:var(--r2);border:1px solid var(--bd-1)" data-page-node-id="NSPj5m60ulK6A9GFcKSEZ7">👨‍⚕️ 泌尿外科医生（原版）</span>
+          <span style="padding:6px 12px;background:var(--bg-over);border-radius:var(--r2);border:1px solid var(--bd-1)" data-page-node-id="UIAvBQi2FdKfaNvz5F2DYu">👩‍⚕️ 女医生 / 实习医生</span>
+          <span style="padding:6px 12px;background:var(--bg-over);border-radius:var(--r2);border:1px solid var(--bd-1)" data-page-node-id="4sHaLPaoqEgySmGjQK85VN">🔬 医学研究者</span>
+          <span style="padding:6px 12px;background:var(--bg-over);border-radius:var(--r2);border:1px solid var(--bd-1)" data-page-node-id="SzQteHsGdDajVWKBooEHPh">🌍 国际医学交流者</span>
+          <span style="padding:6px 12px;background:var(--bg-over);border-radius:var(--r2);border:1px solid var(--bd-1)" data-page-node-id="d89wlJguPbXVogN3SsUoBW">👵 老年医生（需大字体/高对比度）</span>
+          <span style="padding:6px 12px;background:var(--bg-over);border-radius:var(--r2);border:1px solid var(--bd-1)" data-page-node-id="wREzQuUYfM9dareXZj52Ei">♿ 运动障碍医生（需键盘导航）</span>
+          <span style="padding:6px 12px;background:var(--bg-over);border-radius:var(--r2);border:1px solid var(--bd-1)" data-page-node-id="Bi0v34mkckHd4hBF1D6j7h">📖 阅读障碍医生（需 OpenDyslexic）</span>
+          <span style="padding:6px 12px;background:var(--bg-over);border-radius:var(--r2);border:1px solid var(--bd-1)" data-page-node-id="4lLYn21ktjvzyfrZsqFNQk">👁️ 色盲医生（需形状编码）</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 页脚 -->
+  <footer class="page-footer" data-page-node-id="IFbMWzFmhUqKSm5yUCNMio">
+    <span data-page-node-id="fJiICidK3jfROx8Q32kpxt">WinOCR 3.4 多元化包容性视觉优化方案 · WCAG 2.1 AA 合规</span>
+    <span data-page-node-id="OnKlavgGaLeDhxribxAjWt"><a href="index.html" data-page-node-id="sGYHNH43y9zLg3vx3V91Pi">← 返回主窗口</a> · <a href="capture-demo.html" data-page-node-id="QjFCMtJHQ7kWwt329CBz3c">截图交互层</a></span>
+  </footer>
+
+</div>
+
+<script>
+  // 控制面板交互
+  const root = document.documentElement;
+  
+  // 主题切换
+  document.querySelectorAll('[data-theme]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-theme]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      root.setAttribute('data-theme', btn.dataset.theme);
+    });
+  });
+
+  // 字体切换
+  document.querySelectorAll('[data-font]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-font]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      root.setAttribute('data-font', btn.dataset.font === 'dyslexia' ? 'dyslexia' : '');
+    });
+  });
+
+  // 动效切换
+  document.querySelectorAll('[data-motion]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-motion]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      root.setAttribute('data-motion', btn.dataset.motion === 'reduce' ? 'reduce' : '');
+    });
+  });
+</script>
+
+</body>
+</html>

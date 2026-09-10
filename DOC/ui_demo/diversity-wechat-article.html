@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="yQAERNqGIKqN1PIDKoPUCF">
+<head data-page-node-id="HSShFZVhjeYIGvG1RgFsz7">
+<meta charset="UTF-8" data-page-node-id="N6RgwuuGHqYWvaEKqhsQZx">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="n3pQPf2vmwJCucqJslTZGp">
+<title>WinOCR 3.4 · 多元化包容性视觉优化总结</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#f5f5f5;color:#333;line-height:1.8}
+.container{max-width:800px;margin:0 auto;background:#fff;padding:40px 32px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.header{text-align:center;padding-bottom:24px;border-bottom:1px solid #eee;margin-bottom:32px}
+.header h1{font-size:28px;font-weight:700;color:#1a1a1a;margin-bottom:8px}
+.header .subtitle{font-size:14px;color:#888}
+.header .meta{font-size:12px;color:#aaa;margin-top:12px}
+.section{margin-bottom:36px}
+.section-title{font-size:18px;font-weight:600;color:#ff6b2c;border-left:4px solid #ff6b2c;padding-left:12px;margin-bottom:16px}
+.age{display:flex;align-items:flex-start;gap:16px;padding:16px;background:#fafafa;border-radius:8px;margin-bottom:12px}
+.age-icon{font-size:28px;flex-shrink:0}
+.age-content h3{font-size:15px;font-weight:600;margin-bottom:4px}
+.age-old{font-size:13px;color:#999;text-decoration:line-through;margin-bottom:4px}
+.age-new{font-size:13px;color:#333}
+.age-impact{font-size:12px;color:#06b6d4;margin-top:6px;padding-top:6px;border-top:1px dashed #ddd}
+.summary-box{background:linear-gradient(135deg,#fff5eb,#fff0e5);border:1px solid #ffd4a8;border-radius:12px;padding:24px;margin-top:32px}
+.summary-box h2{font-size:18px;margin-bottom:12px;color:#ff6b2c}
+.summary-box p{font-size:13px;color:#555;margin-bottom:8px}
+.summary-box .highlight{font-weight:600;color:#ff6b2c}
+.footer{text-align:center;font-size:11px;color:#aaa;padding-top:20px;border-top:1px solid #eee;margin-top:32px}
+</style>
+</head>
+<body data-page-node-id="pAf07gAmKn4srZQiXAMMFc">
+<div class="container" data-page-node-id="dDFJx1daCFpHn9Axk6NzSH">
+
+<div class="header" data-page-node-id="1mi65gutUqhVmkZAChJpRG">
+  <h1 data-page-node-id="FtrMXfEVEayDqkd4LOlYSs">WinOCR 3.4 多元化包容性视觉优化</h1>
+  <p class="subtitle" data-page-node-id="FcLo1OxmRc6iLYqYhZB2Nm">从「单一医生用户」到「全球多元群体」的视觉设计升级</p>
+  <p class="meta" data-page-node-id="cGbJGy3LLW1aT1o7zsB34Q">WCAG 2.1 AA 合规 · 6大改进维度 · 12项具体优化</p>
+</div>
+
+<div class="section" data-page-node-id="B9OV5hAYsfhPhPscKtgWTj">
+  <h2 class="section-title" data-page-node-id="XwoA7JNjnIB3fy6mCNIiei">设计哲学转变</h2>
+  <p style="font-size:14px;color:#555" data-page-node-id="1aDxBmA8Wm0D1wf6lfRN2R">原设计隐含假设用户为「有医学背景的中年男性、中文母语、视力正常」。新方案基于 <strong data-page-node-id="7JJoH4EbVTbCkhDsIqVPWI">WCAG 2.1 AA</strong> 标准，将用户群体扩展至全球多元用户。</p>
+</div>
+
+<div class="section" data-page-node-id="0i0Qjlgdd2zNKkwAp80gns">
+  <h2 class="section-title" data-page-node-id="cfKuEt5UyBhpp8HrTWQTxV">6大改进维度</h2>
+  
+  <div class="age" data-page-node-id="dkDwPaI8iX7x1FD1V0Wrq4">
+    <div class="age-icon" data-page-node-id="2yXDm5f75Qxcy6liPEGCGq">🎨</div>
+    <div class="age-content" data-page-node-id="hXwNFqQFcEWEArpfWocghy">
+      <h3 data-page-node-id="uaAuCOFGTDAFrzxJ8FV9wX">色彩系统 — 从单一强调到语义化多元</h3>
+      <div class="age-old" data-page-node-id="fVHRCaCrVb466PttY9ancu">✗ 仅 #ff6b2c 琥珀橙一种强调色 + 仅暗色主题</div>
+      <div class="age-new" data-page-node-id="2BBOGtAc6xHq7ceYYx2dIH">✓ 6色语义系统（橙/蓝/紫/翠/琥珀/青）+ 暗色/浅色/高对比度三主题</div>
+      <div class="age-impact" data-page-node-id="3LoxsvIhEoaH89v3XV76c2">👥 色盲用户 · 光敏感用户 · 老年用户 · 多文化用户</div>
+    </div>
+  </div>
+
+  <div class="age" data-page-node-id="D03OyL7LCNb5cVma0edIAq">
+    <div class="age-icon" data-page-node-id="Hn8uuIHhH3f7pYYXvB0but">🔤</div>
+    <div class="age-content" data-page-node-id="m279UEZgDzop9uR0IQYKR8">
+      <h3 data-page-node-id="5KAH1sPJoL5KJTkhI7ykyD">字体系统 — 阅读障碍友好 & 中文深度优化</h3>
+      <div class="age-old" data-page-node-id="K9fQAA9RpBqJELD6HboKPd">✗ IBM Plex Sans 无特殊优化，Noto Sans SC 仅为后备</div>
+      <div class="age-new" data-page-node-id="uBFdDdnIcAsWMC3e3dtmDr">✓ 可选 OpenDyslexic（加粗底部设计）+ 霞鹜文楷中文展示字</div>
+      <div class="age-impact" data-page-node-id="mWgqYXEjCFMLGoN4ZUVyAu">👥 阅读障碍用户(~15%) · 中文用户(~18亿) · 注意力缺陷用户</div>
+    </div>
+  </div>
+
+  <div class="age" data-page-node-id="DeZ6eV8C4oXfdTVrF2trmp">
+    <div class="age-icon" data-page-node-id="s9lhVkvkN78DwAByADU0CL">🔣</div>
+    <div class="age-content" data-page-node-id="Pjy7GfgSMHPiwoxshn3sCg">
+      <h3 data-page-node-id="XmLEjAabIf5VRKIzCR7pAN">图标系统 — 从 Emoji 到 SVG 语义图标</h3>
+      <div class="age-old" data-page-node-id="lUst0ttuC8rvxIM1aTuRh8">✗ Emoji（📸📋💬⚙）跨平台渲染不一致，屏幕阅读器无法识别</div>
+      <div class="age-new" data-page-node-id="ELu1JSDUyPBye6GIC2CdSu">✓ 统一 SVG 图标库 + 文字标签双重编码，完整 aria-label</div>
+      <div class="age-impact" data-page-node-id="OMhzDySNfxERrfSh0aFxwM">👥 屏幕阅读器用户 · 跨平台用户 · 认知障碍用户</div>
+    </div>
+  </div>
+
+  <div class="age" data-page-node-id="fa3SsyCWDkMt0DCUkDmxeS">
+    <div class="age-icon" data-page-node-id="ympBfKowEoD8wVOARkU3qR">👆</div>
+    <div class="age-content" data-page-node-id="GaMfUzOHXInQ8DTzILqs4L">
+      <h3 data-page-node-id="1Mc41z6NnTXmSOvOPo7M84">交互目标 & 动效 — 44px 触摸目标 + 减少动效</h3>
+      <div class="age-old" data-page-node-id="RY1EAJUDA5y1deME4jBN9Q">✗ 30-32px 按钮，仅 @media prefers-reduced-motion</div>
+      <div class="age-new" data-page-node-id="T4oIPs0CTfWt9BeWOTkvQ9">✓ 最小 44×44px + 运行时全局一键关闭动效</div>
+      <div class="age-impact" data-page-node-id="DjiP9poyO9dqL3Jn8qvYgN">👥 运动障碍用户 · 前庭系统敏感用户 · 老年用户</div>
+    </div>
+  </div>
+
+  <div class="age" data-page-node-id="XWVP6Sy1qUmxpMUuXvOcYu">
+    <div class="age-icon" data-page-node-id="EEci2Sfat0ks1UEeLQhSpa">🌍</div>
+    <div class="age-content" data-page-node-id="NCBMt1I8nWwkkYczsyWycS">
+      <h3 data-page-node-id="HLbnVnkUmV7nCNIYBZUlHk">多语言 & RTL — 从中文优先到全球包容</h3>
+      <div class="age-old" data-page-node-id="wCxF2PcxudDhcXzHI74HdU">✗ 仅 LTR 布局，固定 EN→ZH 翻译方向</div>
+      <div class="age-new" data-page-node-id="5csnasG6JyGnKvox3OMrhJ">✓ dir="rtl" 自动翻转 + 任意语言对翻译</div>
+      <div class="age-impact" data-page-node-id="ess4RwNL8hS4pkwhiAGzWs">👥 阿语用户(~4亿) · 希伯来语用户(~900万) · 多语言用户</div>
+    </div>
+  </div>
+
+  <div class="age" data-page-node-id="LyO77vdnpNLJNdYO8X2MQa">
+    <div class="age-icon" data-page-node-id="07mBzSmc4vO4L5Aa7KczSN">🖼</div>
+    <div class="age-content" data-page-node-id="SOQdRgCaw1VBlF5GVDPeyN">
+      <h3 data-page-node-id="avVdyTCy2sBZrQFpJFuhp4">图像替代文本 — 屏幕阅读器友好</h3>
+      <div class="age-old" data-page-node-id="qCpF5bb0hgObeAYaXrq1FA">✗ 信息性 alt 缺失，装饰图标被冗余朗读</div>
+      <div class="age-new" data-page-node-id="2UkcLnbTdrd1t0bESYC2vj">✓ 有意义 alt 文本 + aria-hidden 标记装饰图标</div>
+      <div class="age-impact" data-page-node-id="3c5Af58EYLVDefiYa7qcCV">👥 屏幕阅读器用户 · 盲人/低视力用户</div>
+    </div>
+  </div>
+</div>
+
+<div class="summary-box" data-page-node-id="4h4aU4ajLD8rLAWacR0Yd0">
+  <h2 data-page-node-id="H3cdDIqBgZDD1PneD1fTMj">总结 · 包容性设计提升</h2>
+  <p data-page-node-id="sVeg1TUpwSzFNJf93h24Mi">✓ 从 <span class="highlight" data-page-node-id="Uz5BhwPrPWI12m91UP8yUP">1种主题</span> 到 <span class="highlight" data-page-node-id="965ZPBBEEVmGanO7yKy2fM">3种主题</span>（暗色/浅色/高对比度）</p>
+  <p data-page-node-id="PRUuomEpKRkBWagREr1Gbh">✓ 从 <span class="highlight" data-page-node-id="joxKwhviMokjsvP4Eab952">1种强调色</span> 到 <span class="highlight" data-page-node-id="8k2SALGH9d0xCYJStqg5qu">6色语义系统</span></p>
+  <p data-page-node-id="RB1QdAFiel1qOLFV94XtAH">✓ 从 <span class="highlight" data-page-node-id="PFSpehjrzuXdh0YXmERH3h">30px 触摸目标</span> 到 <span class="highlight" data-page-node-id="EbCmX3fVoH6GSVe5nIL5Ad">44px WCAG AAA 合规</span></p>
+  <p data-page-node-id="wDGYuiFf7cZCYqsF2BCDF1">✓ 从 <span class="highlight" data-page-node-id="fofjtyXWDbJtQIWVtCw6fZ">仅支持中文→英文</span> 到 <span class="highlight" data-page-node-id="AVWBDCpYjU8jNykAZc8Xl7">任意语言对 + RTL 支持</span></p>
+  <p data-page-node-id="qLsT7P4uNs4ZN1tn0EBo0a">✓ 从 <span class="highlight" data-page-node-id="eNyAzCENlvEOYEA00oACHu">Emoji 图标</span> 到 <span class="highlight" data-page-node-id="fnvYQhYJ3wHvCNGzvhowmd">SVG 语义图标 + 完整 ARIA</span></p>
+  <p data-page-node-id="CIC3WGM2EQSsAVkytgPoIA">✓ 覆盖用户群体从 <span class="highlight" data-page-node-id="JMXa3SUCodcx3apQN8MWM1">~100万中文医生</span> 到 <span class="highlight" data-page-node-id="FDWCnMpTTCwnRdhpgysXNT">全球多元用户</span></p>
+</div>
+
+<div class="footer" data-page-node-id="Hfqn7SaOCiEocfm5byqCqH">
+  <p data-page-node-id="mGVHw35KFVmAdsbpSgW7fr"><a href="index.html" style="color:#ff6b2c" data-page-node-id="K8rYryXYgBr8ugxZDGeuEH">查看主窗口 GUI 原型</a> · <a href="capture-demo.html" style="color:#ff6b2c" data-page-node-id="viabqBaycK2GFdg36N67z9">查看截图交互层</a> · <a href="diversity-improved.html" style="color:#ff6b2c" data-page-node-id="SSAQAEiltR5dRdqVRjFtAb">交互式演示</a></p>
+  <p data-page-node-id="idDkvlS0rin83KzePpWlV6">WinOCR 3.4 · 多元化包容性视觉优化方案 · 2026.09.07</p>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,5 +1,233 @@
 # WinOCR 更新日志
 
+## 3.4.25 — 全面 Bug 修复与模型切换稳定性（2026-09-04）
+
+> 对 3.4.24 进行全面代码审查，发现并修复 8 个 bug（含 5 个严重级别）。修复后的配置加载、崩溃捕获、AI 对话流式输出和模型切换均已通过单元测试验证。
+
+### 🔴 严重修复
+
+**配置加载：`config.toml` 中 `[logging]` 段被完全忽略**
+- 根因：`AppConfig.from_dict()` 构造 `cls(...)` 时漏传了 `logging` 字段，导致用户自定义的日志级别/目录/控制台开关永远使用默认值
+- 修复：补入 `logging=build(LoggingConfig, d.get("logging"))`
+- 影响：此前 `config.toml` 中的 `level = "DEBUG"`、`dir = "..."`、`console = false` 等配置均不生效
+
+**AI 对话 / 翻译：切换 GGUF 模型后仍用旧模型**
+- 根因：`llama_cpp_chat.py` 的 `apply_config()` 和 `llama_cpp.py` 的 `set_config()` 只更新 `_model_name`，未清空 `_llm` 缓存；`_get_llm()` 的缓存检查不校验模型名一致性
+- 修复：模型名变更时强制置 `self._llm = None` + `self._model_path = ""`
+- 影响：用户在设置页切换本地模型后，AI 对话和翻译输出仍是旧模型的结果
+
+**崩溃捕获：同秒内多次崩溃文件互相覆盖**
+- 根因：`crash-YYYYMMDD-HHMMSS.log` 文件名精度到秒，主线程与子线程同时崩溃时后者覆盖前者
+- 修复：文件名冲突时自动追加序号 `crash-20260904-235255-1.log`
+- 影响：高并发崩溃场景下可能丢失前一份 crash 转储
+
+**崩溃捕获：`uninstall_crash_handler` 不恢复 Tkinter 异常回调**
+- 根因：`patch_tkinter()` 替换了 `root.report_callback_exception`，但 `uninstall` 未恢复原始 handler
+- 修复：新增 `_tk_root` 记录 root 实例，`uninstall` 时恢复 `_original_tk_handler`
+
+### 🟡 中等修复
+
+**聊天面板：打字机期间用户可发新消息引发竞态**
+- 根因：`_on_reply()` 在 `_stream_start()` 之前调用了 `_finish()`，导致 `_busy=False`
+- 修复：删除 `_on_reply()` 中的 `_finish()`，仅在 `_stream_tick()` 全部输出完毕后才释放 `_busy`
+
+**聊天面板：打字机完成后发送按钮永久禁用**
+- 根因：`_stream_tick()` 输出完成后只清理了内部状态，没有调用 `_finish()`
+- 修复：在字符追加完毕的分支末尾添加 `self._finish()`
+
+**聊天面板：旧流式任务在新消息后继续追加到新的气泡**
+- 根因：`_stream_tick()` 没有校验 gen 是否已被新消息/清空作废
+- 修复：引入 `self._stream_gen` 字段，每次启动流式时记录当前 gen；`_stream_tick()` 开头校验，不匹配则 `self._stream_stop()` 丢弃
+
+### 🟢 低优先级修复
+
+**TTS：`_speak_sapi_oneshot` 中的死代码清理**
+- 根因：`self._proc = proc` 在 `TtsService` 中是孤立赋值（该类从未声明 `_proc` 属性，也从未读取）
+- 修复：删除该行
+
+### 修改文件
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/core/config.py` | `AppConfig.from_dict()` 补传 `logging` 字段 |
+| `winocr/core/crash_handler.py` | 崩溃文件名防覆盖；`uninstall` 恢复 Tk 回调；类型注解修复 |
+| `winocr/services/ai/llama_cpp_chat.py` | `apply_config()` 模型名变更时失效 `_llm` 缓存 |
+| `winocr/services/translate/llama_cpp.py` | `set_config()` 模型名变更时失效 `_llm` 缓存 |
+| `winocr/services/tts.py` | 删除 `_speak_sapi_oneshot` 中的死代码 `self._proc = proc` |
+| `winocr/ui/tk/chat_panel.py` | 流式输出三处竞态修复（`_on_reply` / `_stream_tick` / `_stream_gen` 校验） |
+
+### 验证
+
+- 全部 6 个修改文件 `py_compile` 编译通过
+- 配置加载：空配置回退默认 / 自定义配置正确读取 —— 通过
+- 崩溃文件名：同一秒内 2 次崩溃生成独立文件 —— 通过
+- 模型切换缓存：模型名不变保留缓存 / 模型名变更失效缓存 —— 通过（AI 对话 + 翻译双引擎）
+
+---
+
+## 3.4.24 — AI 对话框：强制中文 + Markdown 渲染 + 流式输出（2026-09-04）
+
+> 修复 AI 对话框的三大体验问题：英文回复、长文本遮蔽、纯文本单调。
+
+### 新增：强制中文回复
+
+- **send() 自动注入中文指令**：通过 `ChatMessage.context_blocks` 在请求前追加
+  `"请用中文回答我所有问题。如果我的输入是英文，请先翻译成中文再回答。"`
+- **UI 不暴露指令**：context_blocks 只发给 provider，UI 气泡只显示用户原话，界面干净
+- **所有 provider 生效**：llama_cpp / openai / glm 三个 provider 都会把 context_blocks 拼到请求前面
+
+### 新增：简化 Markdown 渲染
+
+- **Text tag 高亮**：`_render_markdown()` 用 `tk.Text.tag_configure` 实现
+  - `# 标题` → `md_h` tag（字号 +4，加粗）
+  - `**粗体**` → `md_b` tag（加粗）
+  - `` `代码` `` → `md_code` tag（Consolas 等宽字体 + 背景色）
+- **逐行解析**：标题整行标记，普通行内联解析粗体/代码，重叠 token 自动去重
+- **仅 assistant/system 消息渲染**：user 消息保持纯文本，避免自渲染干扰
+
+### 新增：打字机流式输出
+
+- **_stream_start() / _stream_tick()**：AI 回复不再「等全部到齐再一次性出现」，
+  而是逐字（每 8ms 追加 3 个字符）实时出现在气泡中，配合自动滚动到底。
+- **最终 Markdown 渲染**：全部字符输出完毕后，清空 Text 重新调用 `_render_markdown()`
+  应用完整样式，避免逐字插入时 tag 错位。
+- **安全取消**：`clear_history()` 调用 `_stream_stop()`，取消 `after` 任务防止内存泄漏。
+
+### 修改文件
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/ui/tk/chat_panel.py` | `send()` 注入中文指令；新增 `_render_markdown()` / `_render_md_inline()`；重写 `_on_reply()` 为流式输出；新增 `_stream_start()` / `_stream_tick()` / `_stream_stop()`；`clear_history()` 安全取消流式任务 |
+| `winocr/version.py` | `__version__` 3.4.23 → 3.4.24，HIGHLIGHTS 追加 3.4.24 条目 |
+| `README.md` | 版本号 3.4.23 → 3.4.24 |
+
+### 验证
+
+- `chat_panel.py` py_compile 编译通过；AST 验证所有关键方法签名完整。
+- 无重复方法定义；`_stream_stop()` 中 `after_cancel` 正确调用。
+
+## 3.4.23 — AI 对话框：长文本截断修复 + 用户消息可复制（2026-09-04）
+
+> 修复 AI 长回复被截断看不到完整内容，以及用户消息无法复制的问题。
+
+### 修复内容
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| 长回复被截断 | Text height 用逻辑行数计算，单行超长时 wrap 后的显示行数远大于逻辑行数 | 改用 `count(..., "displaylines")` 获取真实显示行数 |
+| 用户消息无法复制 | user 气泡用 `tk.Label`，不支持文本选择 | user 气泡也改用 `tk.Text`（只读），Ctrl+A/Ctrl+C 可用 |
+
+### 修改文件
+
+- `winocr/ui/tk/chat_panel.py`：user/assistant/system 三角色气泡统一用 Text 展示，height 计算逻辑修正
+- `winocr/version.py`、`README.md`：版本号 3.4.22 → 3.4.23
+
+## 3.4.22 — 日志与崩溃捕获系统（2026-09-04）
+
+> 全局统一日志 + 崩溃自动转储，彻底解决偶发崩溃（ggml-cpu.dll 段错误 / ucrtbase.dll 栈溢出）无迹可寻的问题。
+> 日志按 5MB×3 份轮转，崩溃时自动生成 crash-*.log 含完整 traceback + 系统信息 + 线程列表。
+
+### 背景：偶发崩溃无法排查
+
+近 3 天发生 3 次崩溃（2 次 `ggml-cpu.dll` 段错误 + 1 次 `ucrtbase.dll` 栈缓冲区溢出），
+项目此前仅有 selection 模块的零散日志（`WINOCR_DEBUG=1` 时写 `selection.log`），
+**没有全局日志配置，没有崩溃转储机制**，崩溃后无线索可查。
+
+### 新增：统一日志配置 `winocr/core/logging_config.py`
+
+- **统一格式**：`[2026-09-04 21:30:15][INFO][module_name] 消息内容`，时间精确到秒。
+- **文件轮转**：`RotatingFileHandler`，单文件 5MB、保留 3 份（`winocr.log` / `winocr.log.1` / `winocr.log.2`），
+  日志目录默认 `用户数据目录/logs/`（`paths.user_dir() / "logs"`），自动创建。
+- **环境变量覆盖**：`WINOCR_LOG_LEVEL`（DEBUG/INFO/WARNING/ERROR）、`WINOCR_LOG_DIR`（自定义路径）。
+- **配置文件覆盖**：`winocr.toml` 的 `[logging]` 段（`level` / `dir` / `console`）。
+- **第三方噪音抑制**：urllib3 / asyncio / PIL 等设为 WARNING，避免刷屏。
+- **selection 日志兼容**：`_patch_sel_logging()` 让 `winocr.selection` 日志写到同一文件，不再分叉。
+- **入口函数**：`setup_logging(level="INFO", log_dir=None, console=True)` —— 在 `main.py` 的 `cmd_gui` 中应用启动后调用。
+
+### 新增：崩溃捕获 `winocr/core/crash_handler.py`
+
+- **三处未处理异常接管**：
+  - `sys.excepthook` —— 主线程 Python 未捕获异常
+  - `threading.excepthook` —— 子线程未捕获异常
+  - `tk.report_callback_exception` —— Tkinter 回调异常
+- **faulthandler 原生信号捕获**：`SIGSEGV`（段错误）/ `SIGABRT`（中止）/ `SIGFPE`（浮点异常），
+  写入 `faulthandler-latest.log`（每次覆盖），即使 Python 层来不及执行也能留下 C 层栈。
+- **crash 转储文件**：`crash-YYYYMMDD-HHMMSS.log`，内容含：
+  - 崩溃时间 + 异常类型 + 完整 traceback
+  - 系统信息：Python 版本 / 平台 / 架构 / PID
+  - 线程列表：每个线程的标识 / 守护状态 / 是否存活
+  - 已安装包版本（llama-cpp-python / pillow / requests 等关键依赖）
+- **入口函数**：`install_crash_handler()` —— 在 `main.py` 的 `cmd_gui` 中 `setup_logging` 之后调用。
+- **Tkinter 补丁**：`patch_tkinter(root)` —— 在 `app.py` 的 `App.build()` 中 `root = tk.Tk()` 之后调用。
+
+### 新增：配置对接 `winocr/core/config.py`
+
+- 新增 `@dataclass class LoggingConfig`：`level: str = "INFO"` / `dir: str = ""` / `console: bool = True`
+- `AppConfig` 增加 `logging: LoggingConfig` 字段，`sections()` 和 `to_dict()` 已纳入
+- 用户可在 `winocr.toml` 中配置：
+
+```toml
+[logging]
+level = "DEBUG"      # DEBUG / INFO / WARNING / ERROR
+dir = ""              # 留空=默认 用户目录/logs，可填绝对路径
+console = true        # 是否同时输出到控制台
+```
+
+### 修改文件清单
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/core/logging_config.py` | **新增**：统一日志格式 + RotatingFileHandler 5MB×3 + 环境变量覆盖 + 配置覆盖 + selection 兼容 + 第三方抑制 + `setup_logging()` |
+| `winocr/core/crash_handler.py` | **新增**：sys/threading/tk 三处异常接管 + faulthandler 信号捕获 + crash-*.log 转储 + `install_crash_handler()` + `patch_tkinter(root)` |
+| `winocr/core/config.py` | 新增 `LoggingConfig` dataclass（level/dir/console），`AppConfig` 增加字段，`sections()`/`to_dict()` 纳入 |
+| `main.py` | `cmd_gui` 中增加 `setup_logging()` + `install_crash_handler()`，删除旧的手动 crash.log 写入逻辑 |
+| `winocr/ui/tk/app.py` | `App.build()` 中 `root = tk.Tk()` 后调用 `patch_tkinter(self.root)` |
+| `winocr/version.py` | `__version__` 3.4.21 → 3.4.22，HIGHLIGHTS 追加 3.4.22 条目 |
+
+### 验证
+
+- `logging_config.py`：py_compile 通过；运行时测试 DEBUG/INFO/WARNING/ERROR 全级别写入；selection 兼容写入同一文件。
+- `crash_handler.py`：py_compile 通过；crash dump 文件创建并含 header + exception + sys info + threads；Tkinter patch 安装/卸载正常。
+- `config.py`：py_compile 通过；`LoggingConfig` fields=['level','dir','console']，默认值正确；`sections()` 含 logging；`to_dict()` 含 logging。
+- `main.py`：py_compile 通过；`setup_logging` / `install_crash_handler` 在 `cmd_gui` 中被调用；旧 crash.log 逻辑已删除。
+- `app.py`：py_compile 通过；`patch_tkinter(self.root)` 在 `App.build()` 中被调用。
+
+## 3.4.21 — TTS 朗读进度蒙版（2026-09-04）
+
+> 朗读时在原文/译文区显示淡蓝透亮高亮蒙版，读到哪里蒙版跟到哪里；
+> edge-tts 按句 chunk 粒度回调进度偏移，SAPI 订阅 SpeakProgress 逐词事件回调；
+> 蒙版随朗读自动滚动定位，朗读结束/停止自动清除。
+
+### 功能：读到哪里，光标淡蓝透亮蒙版同时跟进
+
+- **蒙版效果**：tk.Text tag 高亮，浅色模式 `#CCE4FF` 淡蓝底、深色模式 `#1a3a5c` 深蓝底，
+  朗读到当前句/词时高亮该段文本，并自动 `see()` 滚动到可视区。
+- **edge-tts 进度**：保持现有按句切分流式播放（`_split_sentences`），计算每个 chunk 在
+  原文中的字符偏移，播放该 chunk 前回调 `on_progress(offset, length)`。
+- **SAPI 进度**：修改常驻 PowerShell 脚本，`$s.add_SpeakProgress({…})` 订阅逐词进度事件，
+  输出 `PROG:offset:length` 行；Python reader 线程解析后回调 `on_progress`。
+- **连接逻辑**：`do_tts_read` 用 `tts_source_widget()` 确定朗读来源控件（选中→译文→原文），
+  朗读开始调用 `tts_highlight_start(widget)`，进度回调通过 `self.post()` 切回主线程
+  调用 `tts_highlight_update(offset, length)`，朗读完成/失败/停止时 `tts_highlight_stop()`。
+- **向后兼容**：`speak()` 的 `on_progress` 默认 None，settings 试听和旧调用不受影响。
+- **SAPI 降级保护**：`_on_status` 仅在最终状态（"朗读完成"/"朗读失败"/"Edge 在线语音不可用"）
+  清除蒙版，中间状态"改用系统语音…"不清除——SAPI 降级朗读继续蒙版跟进。
+
+### 修改文件清单
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/services/tts.py` | `_build_script` 订阅 SpeakProgress 事件；`_SapiHost.speak` 增加 `on_progress` 参数 + reader 解析 PROG 行；`TtsService.speak`/`_work`/`_speak_edge`/`_speak_edge_single`/`_speak_sapi` 全链路增加 `on_progress` 回调；edge 流式队列从 `Queue[str]` 改 `Queue[tuple]` 携带偏移 |
+| `winocr/ui/tk/main_window.py` | 新增 `tts_source_widget()`、`tts_highlight_start(widget)`、`tts_highlight_update(offset, length)`、`tts_highlight_stop()`；`__init__` 初始化 `_tts_widget` |
+| `winocr/ui/tk/app.py` | `do_tts_read` 重构：用 `tts_source_widget()` 获取来源控件，启动/更新/清除蒙版，`on_progress` 通过 `post()` 切回主线程 |
+| `winocr/version.py` | `__version__` 3.4.20 → 3.4.21，`__release_date__` 更新，HIGHLIGHTS 追加 3.4.21 条目 |
+
+### 验证
+
+- 三文件 `py_compile` 编译通过，AST 验证函数签名正确。
+- 调用链完整：`tts.speak(on_progress=)` → `_on_progress` 闭包 → `post()` → `tts_highlight_update(offset, length)`。
+- 向后兼容：`on_progress` 默认 None，settings 试听 `tts_svc.speak(text, on_status=_restore)` 不受影响。
+
 ## 3.4.20 — 蒙版翻译字号自适应（2026-09-01）
 
 > 蒙版翻译（Ctrl+Shift+M）字号从「死守 OCR 行高」改为「逐行按可用宽+译文字数自适应」，
@@ -337,6 +565,55 @@
 | `~/.winocr/config.toml` | 用户配置同步新顺序，去 `bing` |
 | `winocr/ui/tk/mask_window.py` | 设置面板「引擎」行 + `_report_engine`/`_refresh_engine_label`（argos/失败红字）；worker 成功与 on_error 上报引擎 |
 | `tests/test_mask_settings_panel.py` | 引擎指示 2 项（在线蓝/argos 红、失败红） |
+
+### 附：llama.cpp 本地大模型翻译 + AI 对话（同版补充，2026-09-04）
+
+- **目标**：在纯 CPU 环境（R5 5500 + GT 710 亮机卡）下支持本地大模型翻译与 AI 对话，
+  彻底绕过无计算能力的 GPU。
+- **模型支持**：
+  - **HY-MT1.5-1.8B-Q4_K_M**（~1.08GB，翻译质量好，ModelScope）
+  - **Qwen2.5-0.5B-Instruct-Q4_K_M**（~468MB，速度快 40-60 tok/s，29 种语言，ModelScope）
+- **推理配置**：纯 CPU，`n_gpu_layers=0`（禁用 GT 710），`n_threads=6`（六核全开），
+  `n_ctx=2048`，`verbose=False`；环境变量 `WINOCR_LLAMA_THREADS/CTX/GPU_LAYERS/MODEL_DIR` 可覆盖。
+- **引擎接入**：
+  - `LlamaCppEngine(TranslateEngine)`：惰性加载 GGUF，线程安全（`threading.Lock`），
+    fallback_order 排在 argos 之前（`glm, hunyuan, mymemory, llama_cpp, argos`）。
+  - `LlamaCppProvider(AiProvider)`：支持上下文拼接 + 对话历史持久化（JSON 原子写），
+    双阈值历史裁剪（轮次 + token 估算）。
+- **模型自动发现**：`winocr/core/paths.py` 新增 `find_llama_gguf()`，搜索顺序：
+  `WINOCR_LLAMA_MODEL_DIR` → `~/.winocr/models/llama` → `<项目>/models/llama`。
+- **UI 模型选择器**：「大模型翻译」设置页选择 `llama_cpp` 引擎后，自动显示「本地模型」
+  下拉框，列出 `models/llama/*.gguf`；保存时写入 `cfg.translate.text_model`。
+- **setup.bat 增强**：
+  - pip 源切换：安装前临时切到清华主源 + 阿里辅源，`pip config list` 确认无 pypi.org；
+    安装完成后无论成败都恢复原有配置（备份 → 还原 / unset）。
+  - 模型可选下载：交互式选择下载 Qwen2.5-0.5B / HY-MT1.5-1.8B / both / 跳过；curl 优先，
+    PowerShell 备用；文件已存在自动跳过。
+  - 编码修正：GBK + CRLF，兼容 `chcp 936`。
+- **删除确认升级**：项目管理对话框 `_delete()` 从 `askyesno` 一键确认改为「输入项目名称
+  二次确认」模态窗口，手滑误触/回车都不会删除。
+- **依赖**：`requirements.txt` / `pyproject.toml` 新增 `llama-cpp-python>=0.3.0`（纯 CPU 编译，
+  Windows 无需 CUDA）。
+- **TTS 朗读延迟修复**：`speak()` 调用 `stop()` 时会杀死 SAPI 常驻宿主，下次朗读需重新冷启动
+  PowerShell（~300-600ms），导致"不能一下激发"。修复后 `stop()` 只取消播放不杀宿主，
+  `join` 超时从 1.5s 缩至 0.2s，`warmup()` 增加 SAPI 宿主预热——朗读即时响应。
+- **TTS 方案 B（分 chunk 流式播放）**：长文本从"全文合成后播放"改为"按句切分 + 预取队列"——
+  `_speak_edge()` 对多句文本起后台线程逐句合成推入队列（`maxsize=2`），播放线程边播边等
+  下一句；首声延迟从"等全文"降到"等第一句"，长文本体验提升明显。短文本（单句）走老路径，
+  零退化。零新增依赖，仅改 `winocr/services/tts.py`。
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/services/translate/llama_cpp.py` | 新增：LlamaCppEngine 翻译引擎（纯 CPU GGUF 推理） |
+| `winocr/services/ai/llama_cpp_chat.py` | 新增：LlamaCppProvider AI 对话提供方（上下文 + 历史持久化） |
+| `winocr/core/paths.py` | 新增：`llama_model_search_dirs()` / `llama_model_dir()` / `find_llama_gguf()` |
+| `winocr/core/config.py` | `fallback_order` 加入 `llama_cpp`；`AiConfig.provider` 注释补充 |
+| `winocr/ui/tk/dialogs_settings.py` | 翻译设置页新增「本地模型」下拉选择器（llama_cpp 引擎专用） |
+| `winocr/ui/tk/project_bar.py` | 删除确认升级为「输入项目名称」二次确认模态窗口 |
+| `setup.bat` | pip 源切换（清华+阿里）+ 可选模型下载（curl/PowerShell）+ GBK+CRLF 编码 |
+| `requirements.txt` / `pyproject.toml` | 新增 `llama-cpp-python>=0.3.0` |
+| `winocr/services/tts.py` | TTS 延迟修复（stop 不杀宿主 + join 缩至 0.2s）+ 方案 B 分 chunk 流式播放（预取队列 maxsize=2） |
+| `README.md` | 版本号 3.4.19 → 3.4.20 |
 
 ## 3.4.19 — 工程化改进（2026-08-25）
 

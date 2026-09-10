@@ -27,7 +27,12 @@ def pick_screen_color(callback) -> None:
 
     root = tk.Toplevel()
     root.overrideredirect(True)
-    root.attributes("-fullscreen", True)
+    # 注意：overrideredirect(True) 之后再设 -fullscreen 会直接抛
+    # "TclError: can't set fullscreen attribute: override-redirect flag is set"
+    # （crash-20260908 日志实锤，点「屏幕取色」必崩），改用 geometry 铺满屏幕。
+    sw = root.winfo_screenwidth()
+    sh = root.winfo_screenheight()
+    root.geometry(f"{sw}x{sh}+0+0")
     root.attributes("-alpha", 0.35)
     root.configure(bg="black")
     root.attributes("-topmost", True)
@@ -40,9 +45,6 @@ def pick_screen_color(callback) -> None:
                        highlightthickness=1, highlightbackground="white",
                        bg="white")
     canvas.place(x=0, y=0)
-
-    sw = root.winfo_screenwidth()
-    sh = root.winfo_screenheight()
 
     def _hex(px) -> str:
         try:

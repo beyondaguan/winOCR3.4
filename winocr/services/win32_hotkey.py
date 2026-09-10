@@ -17,6 +17,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import ctypes
+import ctypes.wintypes  # 显式导入：ctypes 不会自动加载 wintypes 子模块，缺了 MSG 等类型直接 AttributeError
 import threading
 from typing import Callable, Dict, Optional
 

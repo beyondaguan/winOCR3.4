@@ -41,6 +41,7 @@ class RapidOcrEngine(OcrEngine):
 
     def __init__(self) -> None:
         self._engine = None
+        self._engine_sig = None  # 构建当前引擎时的 (det, rec, cls) 模型路径签名
         self._lock = threading.Lock()
         self.preprocess: bool = True
         self.model_type: str = "tiny"
@@ -192,6 +193,13 @@ class RapidOcrEngine(OcrEngine):
         return params
 
     def _get_engine(self):
+        # 引擎与「实际解析出的模型路径」绑定：apply_config/configure 改档位后
+        # _models_cache 已失效，此处签名若变化必须重建，否则设置里切了模型档位
+        # 仍静默沿用旧引擎（「配置改了引擎没重载」的经典 bug）。
+        det, rec, cls = self._local_models()
+        sig = (det, rec, cls)
+        if self._engine is not None and self._engine_sig != sig:
+            self._engine = None
         if self._engine is not None:
             return self._engine
         with self._lock:
@@ -204,7 +212,6 @@ class RapidOcrEngine(OcrEngine):
                     "未安装 rapidocr。请运行 setup.bat 或 "
                     "`pip install rapidocr onnxruntime`。"
                 ) from e
-            det, rec, _ = self._local_models()
             if not (det and rec):
                 # 本地模型缺失：明确报错并引导安装，绝不静默联网下载权重
                 raise RuntimeError(
@@ -214,6 +221,7 @@ class RapidOcrEngine(OcrEngine):
                 self._engine = RapidOCR(params=self._build_params())
             except Exception as e:
                 raise RuntimeError(f"RapidOCR 本地模型加载失败: {e}") from e
+            self._engine_sig = sig
         return self._engine
 
     def warmup(self) -> bool:

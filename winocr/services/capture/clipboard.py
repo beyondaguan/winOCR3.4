@@ -221,13 +221,3 @@ def restore_clipboard(fmts: dict) -> bool:
             u32.CloseClipboard()
     except Exception:
         return False
-        try:
-            import tkinter as tk
-            r = tk.Tk()
-            r.withdraw()
-            try:
-                return (r.clipboard_get() or "").strip()
-            finally:
-                r.destroy()
-        except Exception:
-            return ""
