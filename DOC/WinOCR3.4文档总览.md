@@ -1,6 +1,6 @@
 # WinOCR 3.4 文档总览
 
-> **锚点版本：3.4.26（2026-09-11）**。本文件是项目**唯一技术文档**，由原 8 份文档
+> **锚点版本：3.4.27（2026-09-11）**。本文件是项目**唯一技术文档**，由原 8 份文档
 > （文档总览 / 从零复现 / 小白代码导览 / 踩坑 / 团队规范-修复节奏 / AI 辅助开发规范 /
 > 项目栏蓝图 / 迭代计划）按当前代码状态合并重写而成，历史版本可在 git 历史中找回。
 > 版本变更明细见 [`../CHANGELOG.md`](../CHANGELOG.md)。
@@ -13,7 +13,7 @@ Windows 桌面工具：**截图 → OCR 识别 → 翻译 → AI 解读** 一键
 
 | 维度 | 事实 |
 |------|------|
-| 版本 | 3.4.26（`winocr/version.py` 为单一真相源） |
+| 版本 | 3.4.27（`winocr/version.py` 为单一真相源） |
 | 技术栈 | 纯 Python 3 + Tkinter，无 GUI 框架 |
 | OCR | RapidOCR（PP-OCRv6，tiny/small/medium 三档，本地离线）+ Windows 系统视觉接口 |
 | 翻译 | llama.cpp 本地大模型（GGUF）、Argos 离线神经翻译、MyMemory、智谱 GLM、混元 |
@@ -173,6 +173,10 @@ small 随 pip 包自带；Argos 中英包约 140MB 放 `vendor/argos_packages/`�
 | P-07 | 破坏性操作无确认无备份（清空历史直接覆写） | 删除/清空类操作：确认框 `default="no"` + 自动备份（.bak）双保险 |
 | P-08 | `overrideredirect(True)` 后设 `-fullscreen` 在 Windows 必抛 TclError | 无边框全屏用 `geometry("WxH+0+0")`，不要混用两套机制 |
 | P-09 | crash 日志文件名精度到秒，同秒多线程崩溃互相覆盖 | 冲突自动追加序号；转储内容含 traceback + 线程列表 |
+| P-10 | 划词注入 Ctrl+C 时热键修饰键（Ctrl/Shift）还物理按着 → 组合成 Ctrl+Shift+C，目标软件不复制（Chrome 弹 DevTools） | 注入前 `GetAsyncKeyState` 检测并 KEYUP 释放修饰键 |
+| P-11 | 剪贴板轮询取词误读旧内容（假成功/取到旧词） | 备份后先 EmptyClipboard 清空，只认本次新写入；清空失败退化旧行为 |
+| P-12 | keyboard 库对 OS 长按自动重复再次触发回调 → 双贴条 + 双 worker 互抢剪贴板 | 热键回调加去抖窗口（划词 800ms） |
+| P-13 | ctypes 未开 `use_last_error`，LastError 被内部调用覆盖 → 单实例互斥漏判程序双开 | WinAPI 轮询错误一律 `WinDLL(..., use_last_error=True)` + `get_last_error()`；句柄 restype 显式声明 |
 
 > 新踩的坑按「编号 / 现象 / 根因 / 预防规则」格式追加到此表，不另开文件。
 
