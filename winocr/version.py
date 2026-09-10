@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """版本信息（单一真相来源，pyproject 与 UI 都从这里读）。"""
 
-__version__ = "3.4.25"
+__version__ = "3.4.26"
 __version_name__ = "截图识字 · 离线翻译 · AI 解读"
-__release_date__ = "2026-09-04"
+__release_date__ = "2026-09-11"
 
 # 相对 3.0 的架构变化摘要（UI「关于」对话框显示）
 HIGHLIGHTS = [

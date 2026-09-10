@@ -1,5 +1,87 @@
 # WinOCR 更新日志
 
+## 3.4.26 — 并发崩溃根治与历史记录防误删（2026-09-11）
+
+> 源于用户实报「跑 HY-MT 模型时软件崩溃」，沿崩溃日志定位到推理并发问题后全面排查，累计修复 8 个 bug（含 4 个严重级别），并为历史记录增加防误删保护。全部修复经实机复现/功能测试与全量编译验证。
+
+### 🔴 严重修复
+
+**本地翻译（llama.cpp）：并发调用触发原生崩溃（HY-MT 崩溃根因）**
+- 根因：锁只保护模型加载，推理阶段无锁；截图翻译与剪贴板提取两个任务并发进入同一 llama.cpp context，原生层 access violation 直接杀死进程，Python 异常机制无法拦截
+- 修复：`translate()` 全程持实例 `RLock` 串行执行（`Lock` 会与持锁内的 `_get_llm()` 死锁，故用可重入锁）
+- 文件：`winocr/services/translate/llama_cpp.py`
+
+**AI 对话（llama_cpp_chat）：伪锁同型漏洞**
+- 根因：`_get_llm` 内每次调用 `threading.Lock()` 新建锁等于没锁，`chat()` 推理全程无锁
+- 修复：新增实例级 `_infer_lock`，`chat()` 全程持锁，懒加载移入锁内
+- 文件：`winocr/services/ai/llama_cpp_chat.py`
+
+**屏幕取色：点击「屏幕取色」按钮必崩**
+- 根因：`overrideredirect(True)` 之后再设 `-fullscreen`，Windows 上必抛 `TclError: can't set fullscreen attribute: override-redirect flag is set`（crash-20260908 日志实锤）
+- 修复：改用 `geometry("{sw}x{sh}+0+0")` 铺满屏幕，效果等价
+- 文件：`winocr/ui/tk/color_picker.py`
+
+**蒙版翻译：后台线程直触 Tk（偶发卡死隐患）**
+- 根因：`_worker` 在后台线程直接调用 `root.withdraw()/update()/deiconify()`，违反「非主线程不得碰 Tk」铁律，主线程忙时跨线程 Tcl 调用互相阻塞甚至崩溃
+- 修复：`_grab_region` 拆为「线程安全外壳 + 主线程实现」，抓屏（隐藏→截屏→恢复）整体投递回 UI 线程执行并阻塞等待，5 秒超时兜底（超时返回 `None`，`recognize(None)` 安全返回空结果）
+- 文件：`winocr/ui/tk/mask_window.py`
+
+### 🟡 中等修复
+
+**OCR：设置里切换模型档位不生效**
+- 根因：`apply_config` 只清模型路径缓存，从不失效已构建的 `_engine`，运行期 tiny→medium 后一直静默用旧模型，重启才生效
+- 修复：引擎按「实际解析出的模型路径签名 `(det, rec, cls)`」缓存，签名变化自动重建
+- 验证：真实模型实测 tiny→medium 正确重建并加载 medium，未变配置时复用不重建
+- 文件：`winocr/services/ocr/rapidocr.py`
+
+**设置：TTS 试听回调跨线程碰 Tk**
+- 根因：`_test_tts` 的 `_restore` 回调由 TTS 后台线程执行，直接调 `win.after()`（`after` 也是 Tcl 调用）；app.py 的 TTS 接线均走 post，唯独此处遗漏
+- 修复：改为 `window.ui.post()`，与全局规约对齐
+- 文件：`winocr/ui/tk/dialogs_settings.py`
+
+### 🟢 低优先级修复
+
+**Win32 热键兜底：`ctypes.wintypes` 隐式依赖**
+- 根因：使用 `ctypes.wintypes.MSG` 但只 `import ctypes`（子模块不会自动加载），能跑纯靠 `keyboard` 库恰好顺带导入
+- 修复：补显式 `import ctypes.wintypes`
+- 文件：`winocr/services/win32_hotkey.py`
+
+**剪贴板：`restore_clipboard` 末尾不可达死代码**
+- 根因：`return False` 之后残留一段永远执行不到的 Tk 兜底代码（复制粘贴痕迹）
+- 修复：删除
+- 文件：`winocr/services/capture/clipboard.py`
+
+### 🛡️ 防误删保护
+
+**历史记录：清空不再不可恢复**
+- 问题：「清空历史」确认框默认焦点在「是」上，连按两下回车即全清；且 `clear()` 直接覆写空文件，零备份不可恢复
+- 修复：① `clear()` 清空前自动备份到 `history.json.bak`（同目录、覆盖式保留最近一次清空前的全量，改名即可还原）；② 确认框 `default="no"`（回车默认选否），文案说明备份机制，清空后状态栏提示备份位置
+- 验证：沙箱实测——3 条记录清空后 `.bak` 完整保留、空历史再清不覆盖备份、`.bak` 改名可完整还原
+- 文件：`winocr/services/persistence/json_history.py`、`winocr/ui/tk/dialogs_data.py`
+
+### 修改文件
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/services/translate/llama_cpp.py` | `translate()` 全程持实例 RLock 串行化 |
+| `winocr/services/ai/llama_cpp_chat.py` | 实例级 `_infer_lock`；`chat()` 持锁；懒加载入锁 |
+| `winocr/ui/tk/color_picker.py` | 去掉 overrideredirect+fullscreen 组合，改 geometry 铺满 |
+| `winocr/ui/tk/mask_window.py` | 抓屏投递回主线程执行，5 秒超时兜底 |
+| `winocr/services/ocr/rapidocr.py` | 引擎按模型路径签名缓存，档位切换即生效 |
+| `winocr/ui/tk/dialogs_settings.py` | TTS 试听回调 post 回主线程 |
+| `winocr/services/win32_hotkey.py` | 显式 `import ctypes.wintypes` |
+| `winocr/services/capture/clipboard.py` | 清理不可达死代码 |
+| `winocr/services/persistence/json_history.py` | `clear()` 清空前自动备份 `.bak` |
+| `winocr/ui/tk/dialogs_data.py` | 清空确认框 default="no" + 备份提示 |
+
+### 验证
+
+- HY-MT 1.5-1.8B 本地模型双线程并发翻译实机测试：修复前必崩场景 → 串行完成、进程存活
+- 取色器旧写法复现 `TclError`、新写法正常；取色功能正常
+- RapidOCR 档位切换真实模型重建；蒙版抓屏线程投递机制（含超时路径）测试通过
+- 历史备份三场景（清空备份 / 空清不覆盖 / `.bak` 还原）测试通过
+- 全量 `compileall` 通过；配置/引擎用例 8 项全过
+
 ## 3.4.25 — 全面 Bug 修复与模型切换稳定性（2026-09-04）
 
 > 对 3.4.24 进行全面代码审查，发现并修复 8 个 bug（含 5 个严重级别）。修复后的配置加载、崩溃捕获、AI 对话流式输出和模型切换均已通过单元测试验证。
