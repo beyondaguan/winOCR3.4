@@ -4,9 +4,9 @@
 
 纯 Python + Tkinter，无框架。离线 OCR 模型 + Argos 中英离线翻译，断网也能完整运行。
 
-> **文档入口**：技术架构、从零复现、配置系统、插件机制、打包分发、使用说明、测试与决策结论，全部在
-> **[`DOC/WinOCR3.4文档总览.md`](DOC/WinOCR3.4文档总览.md)**。版本里程碑见 [`CHANGELOG.md`](CHANGELOG.md)。
-> 新手入门可先读 [`DOC/小白如何整体把握代码.md`](DOC/小白如何整体把握代码.md)，AI 编程踩坑经验见 [`DOC/踩坑.md`](DOC/踩坑.md)，修复流程规范见 [`DOC/团队规范-修复节奏.md`](DOC/团队规范-修复节奏.md)。
+> **文档入口**：技术架构、快速开始、代码地图、架构铁律、从零复现、开发规范、踩坑精华，
+> 全部合并在**唯一技术文档** [`DOC/WinOCR3.4文档总览.md`](DOC/WinOCR3.4文档总览.md)。
+> 版本里程碑见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 快速开始
 
@@ -93,10 +93,8 @@ WinOCR3.4/
 ├── models/v6_tiny/          # 内置 OCR 模型
 ├── vendor/argos_packages/   # 内置离线翻译包
 ├── plugins/capsules/        # 第三方场景胶囊（自动发现）
-├── tests/                   # 119 用例全过
+├── tests/                   # 32 文件 212 用例全过
 └── DOC/
-    ├── WinOCR3.4文档总览.md  # 唯一技术文档
-    ├── 小白如何整体把握代码.md # 新手代码导览
-    ├── 踩坑.md               # AI 编程踩坑记录
-    └── 团队规范-修复节奏.md   # 修复流程规范
+    ├── WinOCR3.4文档总览.md  # 唯一技术文档（架构/复现/规范/踩坑已合并）
+    └── ui_demo/              # UI 原型 HTML
 ```
