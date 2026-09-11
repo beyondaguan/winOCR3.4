@@ -1,6 +1,7 @@
 """取消机制（P1-8）回归：长任务期间可中断，而非苦等看门狗或重启。
 
 覆盖：run_async 在 cancel_event 置位后丢弃结果 / 发布『已取消』；
+"结果检查→回调"时窗内的取消同样不回填（3.4.29 二次校验分支）；
 TkUi.do_cancel 立刻释放 busy 锁并置位取消令牌。
 """
 import threading
@@ -58,6 +59,39 @@ def test_run_async_without_cancel_still_calls_on_done():
     app.pipeline.run_async(lambda: "ok",
                            on_done=lambda r: done.setdefault("done", r)).join(timeout=5)
     assert done.get("done") == "ok"
+
+
+def test_run_async_cancel_between_check_and_callback():
+    """时窗竞态：第一次取消检查通过后、on_done 执行前被取消 → 不回填。
+
+    用只在第二次 is_set() 才报告已取消的探针事件，精确命中 run_async
+    里"结果检查→回调"之间的二次校验分支：删掉该分支（直接 on_done）
+    本用例必失败，防止修复被回退。
+    """
+    app = App().build()
+    captured = {}
+    app.bus.subscribe(Events.STATUS,
+                      lambda m: captured.setdefault("status", []).append(m))
+
+    class _LateCancel:
+        """第一次 is_set() → False（结果检查放行），之后 → True（回调前取消）。"""
+
+        def __init__(self):
+            self.n = 0
+
+        def is_set(self):
+            self.n += 1
+            return self.n >= 2
+
+    done = {}
+    t = app.pipeline.run_async(lambda: "result",
+                               on_done=lambda r: done.setdefault("done", r),
+                               cancel_event=_LateCancel())
+    t.join(timeout=5)
+
+    assert "done" not in done, "回调前取消不应执行 on_done（过期结果不得回填）"
+    assert any("已取消" in s for s in captured.get("status", [])), \
+        "应发布『已取消』状态"
 
 
 def test_do_cancel_releases_busy_and_signals():
