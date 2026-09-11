@@ -132,10 +132,19 @@ def test_host_singleton():
     assert svc._sapi_host is None
 
 
-def test_stop_reclaims_host():
-    """stop() 回收常驻宿主（进程被终止，引用置空）。"""
+def test_stop_keeps_host_then_stop_host_reclaims():
+    """stop() 保留常驻宿主复用（3.4.14 起）；_stop_host() 才回收置空。
+
+    历史（2026-09-12 勘误）：本用例原名 test_stop_reclaims_host，断言
+    stop() 走 _stop_host 回收宿主——那是常驻宿主改版前的旧语义。改版后
+    stop() 只掐取消位+播放器，宿主保留供下次朗读复用（省 1.4s 冷启动），
+    回收职责移至 _stop_host()（atexit / 显式调用）。此前长期被误判为
+    "SAPI COM 环境问题"，实为测试未随设计演进。
+    """
     svc = TtsService()
     host = svc._get_sapi_host()
     _patch_host_launch(host)          # 仅创建对象，不主动 launch
-    svc.stop()                        # 走 TtsService.stop -> _stop_host
-    assert svc._sapi_host is None
+    svc.stop()
+    assert svc._sapi_host is host, "stop() 应保留常驻宿主供下次朗读复用"
+    svc._stop_host()                  # atexit / 显式回收路径
+    assert svc._sapi_host is None, "_stop_host() 应回收宿主（引用置空）"

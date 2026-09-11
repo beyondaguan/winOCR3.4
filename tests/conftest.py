@@ -27,6 +27,51 @@ def _isolated_winocr_home(tmp_path_factory):
     return home
 
 
+# ------------------------------------------------------------------
+# Tk 测试残留回收（2026-09-12）：部分测试创建 Tk root / Variable 后未显式
+# destroy，解释器退出时的 GC 会在"错误线程/无主循环"状态下拆 Tcl 资源，
+# 触发 Variable.__del__ 刷屏与 Tcl_AsyncDelete 原生中止（0x80000003），
+# 全量 pytest 以原生崩溃收场且崩溃点随时序漂移（中途 PIL ICO 保存、
+# 退出清理都中过招）。方案：包一层 Tk.__init__ 记录所有 root，会话结束
+# 时在主线程、Tcl 仍健康的状态下显式 destroy + gc.collect()，
+# 不给退出 GC 留雷。
+# ------------------------------------------------------------------
+_TK_ROOTS: list = []
+
+
+def pytest_configure(config):
+    try:
+        import tkinter as tk
+    except Exception:  # 无 Tk 环境（CI headless）直接跳过
+        return
+    if getattr(tk.Tk.__init__, "_winocr_tracked", False):
+        return
+    orig_init = tk.Tk.__init__
+
+    def tracked_init(self, *a, **kw):
+        orig_init(self, *a, **kw)
+        _TK_ROOTS.append(self)
+
+    tracked_init._winocr_tracked = True
+    tk.Tk.__init__ = tracked_init
+
+
+def pytest_sessionfinish(session, exitstatus):
+    import gc
+
+    for r in list(_TK_ROOTS):
+        try:
+            if r.winfo_exists():
+                r.destroy()
+        except Exception:
+            pass  # 线程里创建的 root 不能跨线程销毁，保持原样（与旧行为一致）
+    _TK_ROOTS.clear()
+    try:
+        gc.collect()  # 立即跑掉 Tk 相关 finalizer，别拖到解释器退出的危险时点
+    except Exception:
+        pass
+
+
 def pytest_addoption(parser):
     parser.addoption(
         "--headless-gui",
