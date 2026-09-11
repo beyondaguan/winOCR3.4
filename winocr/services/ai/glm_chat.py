@@ -44,6 +44,9 @@ class GlmChatProvider(AiProvider):
         self.api_key = ""
         self.history_path = history_path          # 对话历史持久化文件（重开保留上下文）
         self._hist_lock = threading.Lock()
+        # 对话历史锁：保护 chat() 对 _messages 的 append/trim 与 get_history() 的读取，
+        # 避免后台 chat 线程与 UI 线程并发访问 _messages 导致的数据竞争。
+        self._chat_lock = threading.Lock()
         # 文本侧连接配置（跟随「AI 对话」页所选连接）
         self._text_cfg = OpenAIClientConfig(
             api_key="", base_url=self.DEFAULT_URL, model=self.DEFAULT_TEXT_MODEL)
@@ -242,11 +245,13 @@ class GlmChatProvider(AiProvider):
         return bool(self.api_key)
 
     def clear_history(self) -> None:
-        self._messages.clear()
+        with self._chat_lock:
+            self._messages.clear()
         self._persist()
 
     def get_history(self) -> List[dict]:
-        return list(self._messages)
+        with self._chat_lock:
+            return list(self._messages)
 
     # ------------------------------------------------------------------
     # 历史持久化（已落地）：对话从 chat_history_path 读取 / 写入 JSON，
@@ -294,9 +299,10 @@ class GlmChatProvider(AiProvider):
             self._persist()
         except Exception:
             pass
-        self.history_path = p
-        self._messages = []
-        self._load_history()                      # 持久化失败不阻断对话
+        with self._chat_lock:
+            self.history_path = p
+            self._messages = []
+            self._load_history()                  # 持久化失败不阻断对话
 
     def chat(self, msg: ChatMessage) -> str:
         if not self.api_key:
@@ -329,12 +335,18 @@ class GlmChatProvider(AiProvider):
             history_entry = {"role": "user", "content": full_text}
             use_temp, use_top = self.temperature, self.top_p
 
-        request_messages = self._history_for_request() + [user_msg]
+        # 快照历史要持锁：UI 线程可能同时在读/清 _messages。
+        # 网络请求不持锁（可能数十秒），只在快照与回写两个短临界区加锁。
+        with self._chat_lock:
+            request_messages = self._history_for_request() + [user_msg]
         reply = client.complete(request_messages, system_prompt=self.system_prompt,
                                 temperature=use_temp, top_p=use_top)
-        self._messages.append(history_entry)
-        self._messages.append({"role": "assistant", "content": reply})
-        self._trim_history()
+
+        # 回写历史同样持锁：append/trim 与 get_history/clear_history 互斥
+        with self._chat_lock:
+            self._messages.append(history_entry)
+            self._messages.append({"role": "assistant", "content": reply})
+            self._trim_history()
         self._persist()
         return reply
 

@@ -948,6 +948,9 @@ class ChatPanel:
     def _stream_tick(self) -> None:
         """打字机逐字追加。每次执行前校验 gen 是否仍有效。"""
         if self._stream_widget is None or not self._alive():
+            # 面板已被 reload_ui 重建/销毁：释放悬空的 after 句柄并停止，
+            # 不再让旧实例的打字机任务在事件队列里空转
+            self._stream_stop()
             return
         # gen 已变更（清空对话 / 新消息）→ 丢弃旧流式任务
         if self._stream_gen != self._gen:

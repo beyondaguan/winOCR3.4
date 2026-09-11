@@ -290,7 +290,9 @@ class TkUi(UiAdapter):
                 try:
                     fn(*args, **kwargs)
                 except Exception:
-                    pass  # 单条 UI 回调异常不能拖垮整个泵
+                    # 单条 UI 回调异常不能拖垮整个泵，但必须留痕：
+                    # 控件已销毁回调仍在队列这类问题没有日志根本无从排查
+                    logger.exception("UI 回调执行失败: %r", fn)
         finally:
             try:
                 self.root.after(40, self._pump_ui)

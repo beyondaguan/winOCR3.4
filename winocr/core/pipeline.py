@@ -259,6 +259,11 @@ class Pipeline:
                     self.bus.publish(Events.STATUS, "已取消")
                     return
                 if on_done:
+                    # 二次校验：上一次检查与回调之间仍有时窗，任务结果在手、
+                    # 用户恰好此刻点了取消 → 不回填过期内容
+                    if cancel_event is not None and cancel_event.is_set():
+                        self.bus.publish(Events.STATUS, "已取消")
+                        return
                     on_done(result)
             except Exception as e:
                 if cancel_event is not None and cancel_event.is_set():
