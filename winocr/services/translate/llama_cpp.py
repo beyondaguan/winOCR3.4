@@ -62,6 +62,8 @@ class LlamaCppEngine(TranslateEngine):
         self._max_tokens = 512  # 最大生成 token 数
         self._llm = None  # llama_cpp.Llama 实例（惰性初始化）
         self._model_path = ""  # 已加载的模型路径
+        self._loaded_for_name = ""  # 已加载实例对应的模型名（防换模型竞态）
+        self._wired = False  # 应用启动的首次参数注入不触发预热（保持惰性设计）
         self._lock = threading.RLock()  # 可重入：translate 持锁调用 _get_llm（内部也拿同一把锁）
 
     # ------------------------------------------------------------------
@@ -85,11 +87,16 @@ class LlamaCppEngine(TranslateEngine):
         """
         if model is not None:
             new_model = (model or "").strip()
-            # 模型名变更时失效缓存，否则 _get_llm 会返回旧模型
             if new_model != self._model_name:
                 self._llm = None
                 self._model_path = ""
-            self._model_name = new_model
+                self._loaded_for_name = ""
+                self._model_name = new_model
+                if self._wired and new_model:
+                    # 会话中换模型：立即后台预加载，切换后首次翻译不再干等
+                    # 磁盘加载 + 初始化（qwen 0.5B 冷启 ~5s，1.8B ~2s）。
+                    self._start_preload()
+            self._wired = True
         if max_output_tokens is not None:
             self._max_tokens = int(max_output_tokens) or 512
         if self._model_name:
@@ -116,16 +123,43 @@ class LlamaCppEngine(TranslateEngine):
         """预加载模型（加速首次翻译）。"""
         self._get_llm()
 
+    def _start_preload(self):
+        """后台预加载当前选定模型。
+
+        每次真实换模型都起线程：多线程在 self._lock 上天然串行，
+        后到者发现自己要的模型已加载就立即退出，不会重复装载。
+        预热与 translate 共用锁：加载期间来到的翻译请求只是排队，
+        加载完成后直接推理——原生层始终串行，不会并发崩溃。
+        """
+        threading.Thread(
+            target=self._safe_preload, daemon=True, name="winocr-llama-preload"
+        ).start()
+
+    def _safe_preload(self):
+        try:
+            self._get_llm()
+        except Exception as e:
+            logger.warning("[llama.cpp] 模型预热失败（首次翻译时会再尝试）: %s", e)
+
     def _get_llm(self):
         """惰性加载模型（线程安全）。"""
-        if self._llm is not None and self._model_path:
+        if (
+            self._llm is not None
+            and self._model_path
+            and self._loaded_for_name == self._model_name
+        ):
             return self._llm
         with self._lock:
-            if self._llm is not None and self._model_path:
+            if (
+                self._llm is not None
+                and self._model_path
+                and self._loaded_for_name == self._model_name
+            ):
                 return self._llm
             from ...core.paths import find_llama_gguf, llama_model_search_dirs
 
             path = find_llama_gguf(self._model_name)
+            name_at_load = self._model_name  # 路径与名字同源快照，防加载中换名
             if not path:
                 raise RuntimeError(
                     "llama.cpp: 未找到 GGUF 模型文件。请将模型放入以下目录之一：\n"
@@ -153,6 +187,9 @@ class LlamaCppEngine(TranslateEngine):
                 verbose=False,
             )
             self._model_path = path
+            # 记录发起加载时的模型名：加载期间若 set_config 又换了名字，
+            # 下次调用会因名字不匹配而重载，不会拿旧模型冒充新模型。
+            self._loaded_for_name = name_at_load
             return self._llm
 
     # ------------------------------------------------------------------

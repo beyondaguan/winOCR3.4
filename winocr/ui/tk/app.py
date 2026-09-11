@@ -412,6 +412,16 @@ class TkUi(UiAdapter):
                     tts.warmup()
                 except Exception:
                     pass
+            # 预热当前选中的翻译引擎（llama.cpp 首次加载最重，提前装填后
+            # 启动后第一次翻译即秒回；在线引擎 warmup 是空操作，无副作用）
+            disp = self.app.services.get("translate")
+            if disp is not None:
+                try:
+                    eng = disp.engines.get(self.app.config.translate.engine)
+                    if eng is not None and eng.available():
+                        eng.warmup()
+                except Exception:
+                    pass
 
         threading.Thread(target=_work, daemon=True, name="winocr-warmup").start()
 

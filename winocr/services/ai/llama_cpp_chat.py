@@ -63,6 +63,8 @@ class LlamaCppProvider(AiProvider):
         self._infer_lock = threading.Lock()
         self._llm = None
         self._model_path = ""
+        self._loaded_for_name = ""  # 已加载实例对应的模型名（防换模型竞态）
+        self._wired = False  # 应用启动的首次参数注入不触发预热（保持惰性设计）
         self.system_prompt = _DEFAULT_SYSTEM
         self._messages: List[dict] = []
         self._load_history()
@@ -81,7 +83,12 @@ class LlamaCppProvider(AiProvider):
         if new_model != self._model_name:
             self._llm = None
             self._model_path = ""
-        self._model_name = new_model
+            self._loaded_for_name = ""
+            self._model_name = new_model
+            if self._wired and new_model:
+                # 会话中换模型：立即后台预加载，切换后首条对话不再干等
+                self._start_preload()
+        self._wired = True
         self.max_output_tokens = config.max_output_tokens
         self.max_context_tokens = config.max_context_tokens
         self.max_turns = config.max_turns
@@ -166,15 +173,42 @@ class LlamaCppProvider(AiProvider):
     # ------------------------------------------------------------------
     # 模型加载（惰性、线程安全）
     # ------------------------------------------------------------------
+    def _start_preload(self):
+        """后台预加载当前选定模型。
+
+        每次真实换模型都起线程：多线程在 _infer_lock 上天然串行，
+        后到者发现模型已加载就立即退出，不会重复装载。
+        预热与 chat 共用锁：加载期间来到的对话请求只是排队，
+        加载完成后直接推理——原生层始终串行。
+        """
+        threading.Thread(
+            target=self._safe_preload, daemon=True, name="winocr-llama-chat-preload"
+        ).start()
+
+    def _safe_preload(self):
+        try:
+            self._get_llm()
+        except Exception as e:
+            logger.warning("[llama.cpp] 对话模型预热失败（首次对话时会再尝试）: %s", e)
+
     def _get_llm(self):
-        if self._llm is not None and self._model_path:
+        if (
+            self._llm is not None
+            and self._model_path
+            and self._loaded_for_name == self._model_name
+        ):
             return self._llm
         with self._infer_lock:
-            if self._llm is not None and self._model_path:
+            if (
+                self._llm is not None
+                and self._model_path
+                and self._loaded_for_name == self._model_name
+            ):
                 return self._llm
             from ...core.paths import find_llama_gguf, llama_model_search_dirs
 
             path = find_llama_gguf(self._model_name)
+            name_at_load = self._model_name  # 路径与名字同源快照，防加载中换名
             if not path:
                 raise RuntimeError(
                     "llama.cpp: 未找到 GGUF 模型文件。请将模型放入以下目录之一：\n"
@@ -202,6 +236,7 @@ class LlamaCppProvider(AiProvider):
                 verbose=False,
             )
             self._model_path = path
+            self._loaded_for_name = name_at_load
             return self._llm
 
     # ------------------------------------------------------------------
