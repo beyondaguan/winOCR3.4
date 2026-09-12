@@ -14,6 +14,7 @@
   WINOCR_LLAMA_THREADS    (默认 6)
   WINOCR_LLAMA_CTX        (默认 2048)
   WINOCR_LLAMA_GPU_LAYERS (默认 0)
+  MKL_THREADING_LAYER     (默认 TBB，见下方说明)
 """
 
 from __future__ import annotations
@@ -21,6 +22,14 @@ from __future__ import annotations
 import logging
 import os
 import threading
+
+# conda-forge 版 llama.cpp 的 ggml-blas 链接 Intel MKL：MKL 默认的 INTEL
+# 线程层会加载 libiomp5md.dll，与 ctranslate2（Argos 引擎）自带的同名
+# OpenMP 运行时在同一进程内冲突，触发 "OMP: Error #15" 直接中止进程。
+# 强制 MKL 使用 TBB 线程层（mkl_tbb_thread.3.dll + tbb12.dll，随 conda
+# 包一并安装），进程中不再加载第二份 OpenMP 运行时。
+# 必须在 llama_cpp 原生库（进而 MKL）被加载前设置；用户显式设置时不覆盖。
+os.environ.setdefault("MKL_THREADING_LAYER", "TBB")
 
 from .base import TranslateEngine
 

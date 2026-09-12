@@ -12,6 +12,7 @@ OpenAiCompatProvider 同语义）。不支持视觉（supports_vision=False）�
   WINOCR_LLAMA_THREADS    (默认 6)
   WINOCR_LLAMA_CTX        (默认 2048)
   WINOCR_LLAMA_GPU_LAYERS (默认 0)
+  MKL_THREADING_LAYER     (默认 TBB，见下方说明)
 """
 
 from __future__ import annotations
@@ -21,6 +22,12 @@ import logging
 import os
 import threading
 from typing import List, Optional
+
+# conda-forge 版 llama.cpp 的 ggml-blas 链接 Intel MKL：默认 INTEL 线程层
+# 加载 libiomp5md.dll，与 ctranslate2（Argos）自带的 OpenMP 运行时同进程
+# 冲突（"OMP: Error #15" 直接中止进程）。改用 TBB 线程层规避；必须在
+# llama_cpp 原生库加载前设置，用户显式设置时不覆盖。
+os.environ.setdefault("MKL_THREADING_LAYER", "TBB")
 
 from .base import AiProvider
 from ...core.types import ChatMessage

@@ -28,7 +28,14 @@ langid>=1.1.6
 # 适配 HY-MT1.5-1.8B-Q4_K_M 等翻译模型，也支持 Qwen2.5-1.5B 等通用对话模型
 # 模型文件放 models/llama/ 目录；n_gpu_layers=0 禁用 GPU（GT 710 负优化）
 # 环境变量微调：WINOCR_LLAMA_THREADS / WINOCR_LLAMA_CTX / WINOCR_LLAMA_GPU_LAYERS
-llama-cpp-python>=0.3.0
+#
+# llama-cpp-python 在 PyPI 只有源码包，直接 pip 安装需要 C++ 编译器，故默认不装。
+# 安装方式（无需 Miniconda、无需编译器、不经 GitHub）：
+#     python tools\download_all_models.py wheel
+# 或直接运行 install_all.bat / setup.bat（自动执行上述步骤，从国内 conda 镜像组装）
+# 详见 docs/llama-cpp-python-cn-mirror.md
+#
+# llama-cpp-python>=0.3.0
 
 # ---- 附件轴（AI 对话读文档）----
 PyMuPDF>=1.24.0    # PDF 全文提取
