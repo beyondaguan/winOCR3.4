@@ -1,6 +1,6 @@
 # WinOCR 3.4 文档总览
 
-> **锚点版本：3.4.27（2026-09-11）**。本文件是项目**唯一技术文档**，由原 8 份文档
+> **锚点版本：3.4.30（2026-09-14）**。本文件是项目**唯一技术文档**，由原 8 份文档
 > （文档总览 / 从零复现 / 小白代码导览 / 踩坑 / 团队规范-修复节奏 / AI 辅助开发规范 /
 > 项目栏蓝图 / 迭代计划）按当前代码状态合并重写而成，历史版本可在 git 历史中找回。
 > 版本变更明细见 [`../CHANGELOG.md`](../CHANGELOG.md)。
@@ -13,13 +13,15 @@ Windows 桌面工具：**截图 → OCR 识别 → 翻译 → AI 解读** 一键
 
 | 维度 | 事实 |
 |------|------|
-| 版本 | 3.4.27（`winocr/version.py` 为单一真相源） |
+| 版本 | 3.4.30（`winocr/version.py` 为单一真相源） |
 | 技术栈 | 纯 Python 3 + Tkinter，无 GUI 框架 |
 | OCR | RapidOCR（PP-OCRv6，tiny/small/medium 三档，本地离线）+ Windows 系统视觉接口 |
-| 翻译 | llama.cpp 本地大模型（GGUF）、Argos 离线神经翻译、MyMemory、智谱 GLM、混元 |
+| 翻译 | llama.cpp 本地大模型（GGUF，**硬件自动探测线程/GPU/ctx**）、Argos 离线神经翻译、MyMemory、智谱 GLM、混元 |
 | AI 对话 | OpenAI 兼容接口 / GLM / 混元 / llama.cpp 本地模型 |
 | 离线能力 | OCR 模型与中英翻译包全部本地，断网完整可用（`[translate] offline_mode=True` 仅走离线引擎） |
-| 测试 | 32 个测试文件、212 个用例（`tests/`） |
+| 硬件自适配 | `core/hardware.py` 自动探测物理核数（封顶 8）、NVIDIA Volta+ GPU（算力≥7.0 才全层卸载）、内存 ctx 窗口（≥16GB→8192 / ≥8GB→4096 / 否则 2048）；老卡（GT 710/GTX 750）自动过滤走 CPU 反而更快；用户可通过 `WINOCR_LLAMA_THREADS` / `WINOCR_LLAMA_GPU_LAYERS` / `WINOCR_LLAMA_CTX` 覆盖 |
+| 跨环境安装 | `install_all.bat` pip 镜像回退链（阿里云→清华→中科大→PyPI 官方）+ conda 回退（南大→华为云→中科大→conda-forge 官方）；Python ≥ 3.10 硬阻塞 |
+| 测试 | 37 个测试文件、249 个用例（`tests/`） |
 | 入口 | `main.py`（GUI / console / doctor / models / config / ocr 子命令） |
 | 分发 | 便携模式（模型内置于 `models/`、`vendor/`）或常规模式（数据放 `~/.winocr`） |
 
@@ -27,6 +29,8 @@ Windows 桌面工具：**截图 → OCR 识别 → 翻译 → AI 解读** 一键
 
 ```cmd
 setup.bat          :: 建虚拟环境、装依赖、自动下载 OCR 模型(tiny+medium)+Argos 中英包、自检
+                   :: pip 镜像自动回退（阿里云→清华→中科大→PyPI 官方），海外机器也能装
+                   :: Python ≥ 3.10 硬阻塞；conda 镜像自动回退（南大→华为云→中科大→conda-forge 官方）
 run.bat            :: 启动图形界面
 ```
 
@@ -58,11 +62,12 @@ winocr/
 │   ├── event_bus.py         #   事件总线：订阅/派发（快照式，回调异常隔离）
 │   ├── paths.py             #   路径决策：便携模式 vs ~/.winocr
 │   ├── crash_handler.py     #   崩溃捕获：sys/threading/tk 三处接管 + faulthandler
+│   ├── hardware.py           #   硬件探测：物理核数 / NVIDIA GPU 架构过滤 / 内存 ctx 建议
 │   └── guards.py / exit_guard.py  # 进程单例锁、退出兜底
 ├── services/                # 服务层：六轴 + 通用客户端
 │   ├── capture/             #   捕获轴：截图、剪贴板（Win32 句柄备份/还原）
 │   ├── ocr/                 #   OCR 轴：rapidocr（按模型路径签名缓存引擎）、系统视觉
-│   ├── translate/           #   翻译轴：llama_cpp（实例锁串行）、argos、mymemory、glm、混元
+│   ├── translate/           #   翻译轴：llama_cpp（硬件自适配线程/GPU/ctx + 实例锁串行 + 后台预加载）、argos、mymemory、glm、混元
 │   ├── ai/                  #   AI 轴：llama_cpp_chat、glm_chat、openai 兼容对话
 │   ├── attach/              #   附加轴：TTS（SAPI/MCI 双引擎降级）、hotkey、tray、win32_hotkey
 │   ├── persistence/         #   持久化轴：json_history（原子写+.bak 备份）、knowledge（SQLite FTS5）
@@ -92,6 +97,8 @@ DOC/ui_demo/                 # UI 原型 HTML（非运行代码）
 7. **单实例 + 退出兜底**：进程锁防多开；托盘退出有 2 秒强杀兜底，防止残进程。
 8. **原子写**：历史/配置等 JSON 一律「写临时文件 → os.replace」，进程被杀不出半截文件。
 9. **离线优先**：`argos` 是断网最后保障；禁止静默联网下载 OCR 模型权重（下载必须走显式脚本）。
+10. **硬件自适配**：所有引擎默认值从 `core/hardware.py` 探测（物理核数封顶 8 / NVIDIA Volta+ 才全层卸载 / 内存决定 ctx 窗口）；用户设环境变量 `WINOCR_LLAMA_*` 永远覆盖探测值；GPU 老卡（Kepler/Pascal）自动过滤走 CPU 反而更快。
+11. **模型切换预加载**：llama.cpp 引擎在配置变更时后台线程预加载新模型，避免用户切模型后首次翻译干等 2~15 秒冷启动；与推理共用实例锁天然串行，不并发崩原生层。
 
 ## 5. 功能与热键（当前全集）
 
@@ -115,7 +122,7 @@ DOC/ui_demo/                 # UI 原型 HTML（非运行代码）
 ## 6. 测试
 
 ```cmd
-.venv\Scripts\python.exe -m pytest tests/ -q      # 32 文件 212 用例
+.venv\Scripts\python.exe -m pytest tests/ -q      # 37 文件 249 用例
 ```
 
 - 布局：`tests/` 按轴分文件（config / projects / json_history / knowledge / ocr / translate / chat…）
@@ -177,6 +184,9 @@ small 随 pip 包自带；Argos 中英包约 140MB 放 `vendor/argos_packages/`�
 | P-11 | 剪贴板轮询取词误读旧内容（假成功/取到旧词） | 备份后先 EmptyClipboard 清空，只认本次新写入；清空失败退化旧行为 |
 | P-12 | keyboard 库对 OS 长按自动重复再次触发回调 → 双贴条 + 双 worker 互抢剪贴板 | 热键回调加去抖窗口（划词 800ms） |
 | P-13 | ctypes 未开 `use_last_error`，LastError 被内部调用覆盖 → 单实例互斥漏判程序双开 | WinAPI 轮询错误一律 `WinDLL(..., use_last_error=True)` + `get_last_error()`；句柄 restype 显式声明 |
+| P-14 | 测试替身签名过时（真实函数加了 `on_progress=` 参数），TypeError 被 `except: pass` 吞掉 → 假函数从未被调用，断言全绿但行为漂移 | 改签名必须全局搜 mock/替身同步；测试断言参数而非仅返回值；**禁止**用 `except: pass` 静默吞异常 |
+| P-15 | 原生崩溃（0x80000003）泄漏的 Tk root 在解释器退出 GC 时于错误线程拆 Tcl 资源 | conftest 加会话收尾统一销毁所有 Tk root；`compileall` + pytest 全量是每次提交的阻塞门禁 |
+| P-16 | GPU 老卡（GT 710 compute_cap=3.5）offload 反而比 CPU 慢 3 倍 → 用户切 GPU 白等还更慢 | `hardware.py` 按 `nvidia-smi` 返回的 `compute_cap >= 7.0`（Volta+）才默认全层卸载；老卡自动过滤走 CPU |
 
 > 新踩的坑按「编号 / 现象 / 根因 / 预防规则」格式追加到此表，不另开文件。
 
