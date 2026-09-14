@@ -1,5 +1,75 @@
 # WinOCR 更新日志
 
+## 3.4.29 — 划词翻译增强：移植取词修复 + 自动划词回归（2026-09-13）
+
+> 吸收同源参考项目划词翻译的成熟实现：修掉「Ctrl+C 注入从未生效」的致命结构体缺陷，补齐 UIA 后代扫描与按应用智能取词策略；同时以「默认关 + 防误触闸门」回归自动划词——鼠标划选松开 / 双击即翻译，不再依赖手动按 Ctrl+Shift+D。249 用例全过。
+
+### 🔴 严重修复
+
+**取词注入 Ctrl+C 在 x64 上静默失败（「必须先手动 Ctrl+C 再划词」的根因）**
+- 根因：`send_ctrl_c()` 的 INPUT 结构体只定义了 KEYBDINPUT，缺 MOUSEINPUT union——64 位下 `sizeof(INPUT)=32 ≠ 系统 40`，SendInput 返回 0（ERROR_INVALID_PARAMETER）且无人知晓
+- 修复：INPUT 改为完整 `_INPUTunion(ki, mi)`（x64 实测 sizeof=40），SendInput 失败记 debug 日志不再静默；单测锁定 `sizeof==40`
+- 文件：`winocr/services/capture/selection.py`
+
+### 🟡 中等改进
+
+**UIA 取词补「有界后代扫描」：选区挂在子孙节点的应用也能取到**
+- 背景：部分浏览器 / PDF 把选区 TextPattern 挂在焦点控件的后代节点上，旧实现只向上找 3 层祖先 → 取词为空
+- 修复：祖先链全空后做 BFS 后代扫描（上限 24 节点，防大 UI 树拖慢取词），先近后远
+- 文件：`winocr/services/capture/selection.py`
+
+**智能取词：按前台应用自动选择最优策略**
+- 实现：`foreground_app_name()` + `_APP_STRATEGY`（chrome/office/IDE→uia 直读；微信/QQ→clip 剪贴板；winrar/totalcmd→wmcopy）+ `_STRATEGY_CHAIN` 降级链，未收录应用走默认 auto 链
+- 文件：`winocr/services/capture/selection.py`
+
+**WM_COPY 改发「焦点控件」：第二轮兜底真正生效**
+- 根因：旧实现把 WM_COPY 发给前台顶层窗口，多数程序不处理，兜底形同虚设
+- 修复：GetGUIThreadInfo 取 hwndFocus（退而 hwndActive、顶层窗口），抽出 `_resolve_copy_target()` 纯函数便于单测
+- 文件：`winocr/services/capture/selection.py`
+
+### ✨ 新功能：自动划词（默认关，设置里开）
+
+**鼠标划选松开 / 双击单词 → 自动取词翻译（`winocr/services/capture/auto_select.py`）**
+- WH_MOUSE_LL 全局鼠标钩子，显式声明全部 64 位 restype/argtypes（根除旧 selection_monitor「回调收不到」的 HHOOK 截断根因，CHANGELOG 3.11.x 教训）
+- 线程模型：泵线程装钩 + GetMessageW（stop 用 PostThreadMessageW(WM_QUIT) 同线程卸钩，幂等）；回调体内只做手势判定 + 布尔闸门 + 入队（不 sleep 不 import 不打日志）；延时等待与取词在工作线程
+- 防误触六道闸（3.4.3 撤销主因逐一防护）：默认关 / 位移 ≥10px 才算划选 / 排除自身窗口（前台 PID） / busy 在途不叠加 / 相同原文 1.5s 去重 / auto 模式取词为空静默跳过不弹贴条
+- 双击判定：WH_MOUSE_LL 收不到系统合成 DBLCLK，按 GetDoubleClickTime + 双击矩形自行合成；双击独立开关
+- 配置热同步：设置保存（CONFIG_CHANGED）即时启停钩子 / 改延时，无需重启；旧 `ui.selection_auto=True` 用户无感迁移
+- 设置界面新增「划词翻译」页签：总开关、双击取词、稳定延时 Spinbox(0–2000ms)；Ctrl+Shift+D 手动划词不受开关影响
+
+### 🐛 附带修复
+
+**auto_select 钩子永远装不上：GetModuleHandleW 用错了 DLL**
+- 根因：`GetModuleHandleW` 属于 kernel32，实现却调 `user32.GetModuleHandleW`（AttributeError 被泵线程 try/except 吞掉 → 每次都静默降级纯热键模式）——由新增单测收集阶段直接暴露
+- 修复：改用 `k32.GetModuleHandleW`
+- 文件：`winocr/services/capture/auto_select.py`
+
+### 修改文件
+
+| 文件 | 改动 |
+|------|------|
+| `winocr/services/capture/selection.py` | 4 项取词修复：INPUT 结构体 / UIA 后代扫描 / 应用策略表 / WM_COPY 焦点控件 |
+| `winocr/services/capture/auto_select.py` | 新增：鼠标钩子手势检测 + 生命周期管理（修正 GetModuleHandleW 归属） |
+| `winocr/core/config.py` | 新增 SelectionConfig（enabled/delay_ms/dblclick）+ 旧字段迁移 |
+| `winocr/ui/tk/app.py` | 钩子接线：启停 / 热同步 / busy / 自身窗口排除 / 退出清理 / auto 静默模式 |
+| `winocr/ui/tk/dialogs_settings.py` | 新增「划词翻译」设置页签 |
+| `tests/test_selection_capture.py` | 扩展 10 项：结构体 / 策略链 / 焦点控件 / UIA 后代扫描 |
+| `tests/test_auto_select.py` | 新增 17 项：手势状态机 / 钩子闸门 / SelectionConfig 迁移与往返 |
+| `winocr/version.py` | 3.4.28 → 3.4.29 |
+| `README.md` | 版本号同步 |
+| `CHANGELOG.md` | 本节 |
+
+### 验证
+
+- `pytest tests -q`：249 passed（新增 27 用例），唯一 warning 为既有 Pillow getdata 弃用提醒（与本版无关）
+- 手工验证清单（WINOCR_DEBUG=1，见下方建议）：
+  1. 记事本 / Chrome 划选后按 Ctrl+Shift+D：不再需要先手动 Ctrl+C
+  2. 设置 → 划词翻译 → 开启自动划词，保存：记事本划选 10px+ 自动弹贴条；单击不触发
+  3. 双击单词自动取词；设置里关掉双击后仅划选生效
+  4. WinOCR 自身窗口内划选不触发；翻译进行中连续划选不叠加
+  5. 改延时 / 开关保存后立即生效（无需重启）；托盘退出后鼠标无残留卡顿
+- 钩子装钩失败（如被安全软件拦截）自动降级纯热键模式，功能不劣化
+
 ## 3.4.28 — llama.cpp 换模型后台预加载，消除切换延迟（2026-09-11）
 
 > 针对用户实报「千问模型反应好慢，切换延迟」：实测定位根因不在推理速度（Qwen2.5-0.5B 在 R5 5500 上 ~44 tok/s，为本地模型最快），而在模型惰性加载——切换模型后的第一次翻译/对话要同步等待磁盘加载+初始化（0.5B 冷启 ~5s，1.8B ~2s，HDD/杀软扫描时更久），被感知为「反应好慢」。本版把加载提前到切换瞬间后台完成。

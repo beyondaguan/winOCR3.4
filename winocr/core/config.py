@@ -195,6 +195,19 @@ class LoggingConfig:
 
 
 @dataclass
+class SelectionConfig:
+    """自动划词（鼠标划选松开后自动取词翻译）。
+
+    3.4.3 曾因误触撤销自动划词；本版以「默认关 + 位移阈值 + 去抖 + 排除自身
+    窗口」回归。Ctrl+Shift+D 手动划词不受此开关影响，始终可用。
+    """
+
+    enabled: bool = False  # 自动划词总开关（默认关，设置里可开）
+    delay_ms: int = 300  # 松开鼠标到取词的稳定等待（毫秒）
+    dblclick: bool = True  # 双击取词（选中单词后自动翻译）
+
+
+@dataclass
 class AppConfig:
     ocr: OcrConfig = field(default_factory=OcrConfig)
     translate: TranslateConfig = field(default_factory=TranslateConfig)
@@ -204,6 +217,7 @@ class AppConfig:
     tts: TtsConfig = field(default_factory=TtsConfig)
     plugin: PluginConfig = field(default_factory=PluginConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
+    selection: SelectionConfig = field(default_factory=SelectionConfig)
     # 真·项目栏（3.4 MVP）：项目注册表 + 当前项目。默认含一个不可关的「默认」项目。
     projects: List[ProjectConfig] = field(default_factory=lambda: [ProjectConfig()])
     current_project: str = "default"
@@ -229,6 +243,7 @@ class AppConfig:
             ("tts", self.tts),
             ("plugin", self.plugin),
             ("logging", self.logging),
+            ("selection", self.selection),
         ]
 
     def to_dict(self) -> dict:
@@ -259,6 +274,7 @@ class AppConfig:
             tts=build(TtsConfig, d.get("tts")),
             plugin=build(PluginConfig, d.get("plugin")),
             logging=build(LoggingConfig, d.get("logging")),
+            selection=build(SelectionConfig, d.get("selection")),
         )
         cfg._apply_legacy_migration(d)
         # 真·项目栏：解析 projects 列表 + current_project（强制保证 default 存在、current 合法）
@@ -322,6 +338,12 @@ class AppConfig:
             self.translate.base_url = _s(tr_raw.get("glm_base_url"))
         if _s(tr_raw.get("glm_model")) and not self.translate.text_model:
             self.translate.text_model = _s(tr_raw.get("glm_model"))
+
+        # --- 自动划词（旧 ui.selection_auto 开启过的用户无感迁移）---
+        if "selection" not in d:
+            ui_raw = d.get("ui") or {}
+            if ui_raw.get("selection_auto") is True:
+                self.selection.enabled = True
 
         # --- 云端视觉 OCR（用本功能自己的连接参数）---
         if _s(oc_raw.get("cloud_api_key")) and not self.ocr.api_key:

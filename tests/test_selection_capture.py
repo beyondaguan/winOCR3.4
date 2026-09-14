@@ -140,5 +140,175 @@ def test_poll_clipboard_text_timeout_and_exception():
     assert sel.poll_clipboard_text(boom, timeout=0.15, interval=0.03) == ""
 
 
+# ---------------------------------------------------------------------------
+# 以下为「吸收旧版划词 4 项修复」的回归测试：
+#   1) INPUT 结构体含 MOUSEINPUT union（x64 下 sizeof==40，否则 SendInput 静默失败）
+#   2) UIA 祖先无文本时做有界后代 BFS 扫描
+#   3) 应用-策略映射表（chrome→uia / wechat→clip / winrar→wmcopy）
+#   4) WM_COPY 目标解析优先焦点控件（GetGUIThreadInfo）
+# ---------------------------------------------------------------------------
+import ctypes
+import sys
+import types
+
+
+def test_input_struct_size_x64():
+    """x64 系统 sizeof(INPUT) 必须 == 40（含 MOUSEINPUT 的完整 union）。
+
+    旧实现缺 MOUSEINPUT 导致 sizeof==32，SendInput 返回 0 且
+    ERROR_INVALID_PARAMETER —— Ctrl+C 注入从未生效。
+    """
+    union_size = ctypes.sizeof(sel._INPUTUNION)
+    assert union_size >= ctypes.sizeof(sel._KEYBDINPUT)
+    assert ctypes.sizeof(sel._INPUT) > union_size          # type 字段 + 对齐
+    if sys.maxsize > 2 ** 32:                       # 64 位 Python
+        assert ctypes.sizeof(sel._INPUT) == 40      # 必须与系统 sizeof(INPUT) 一致
+        assert hasattr(sel._INPUTUNION, "mi")       # union 必须含 MOUSEINPUT
+
+
+def test_app_strategy_mapping():
+    """常见应用映射：浏览器/IDE→uia、通讯软件→clip、老旧程序→wmcopy。"""
+    m = sel.SelectionCapturer._APP_STRATEGY
+    assert m["chrome.exe"] == "uia"
+    assert m["msedge.exe"] == "uia"
+    assert m["code.exe"] == "uia"
+    assert m["wechat.exe"] == "clip"
+    assert m["qq.exe"] == "clip"
+    assert m["winrar.exe"] == "wmcopy"
+    # 未收录的应用 → auto（默认链）
+    ch = sel.SelectionCapturer._STRATEGY_CHAIN
+    assert ch.get(m.get("unknown.exe", "auto")) == ch["auto"]
+
+
+def test_strategy_chain_covers_all_strategies():
+    """每条策略链都覆盖 uia/clip/wmcopy 三种方式（只是顺序不同）。"""
+    ch = sel.SelectionCapturer._STRATEGY_CHAIN
+    for name, chain in ch.items():
+        assert set(chain) == {"uia", "clip", "wmcopy"}, name
+        if name != "auto":                          # auto 链即默认序，首项 uia
+            assert chain[0] == name                 # 首选与策略名一致
+    # auto 链与 uia 链同序（默认 UIA 优先）
+    assert ch["auto"] == ("uia", "clip", "wmcopy")
+
+
+def test_capture_reorders_chain_by_app(monkeypatch):
+    """微信（clip 优先）时即使 UIA 有文本也先走剪贴板 —— 验证策略链重排生效。"""
+    _patch_helpers(monkeypatch, uia_text="UIA selected")
+    monkeypatch.setattr(sel, "foreground_app_name", lambda: "wechat.exe")
+    monkeypatch.setattr(sel, "wait_modifiers_released", lambda timeout=1.0: True)
+
+    cb = _FakeClipboard(["clip text"])
+    monkeypatch.setattr(sel, "poll_clipboard_text",
+                        lambda reader, timeout=1.0, interval=0.1: reader())
+    cap = sel.SelectionCapturer()
+    text, src = cap.capture(clipboard=cb)
+    assert src == "clip"                            # 非 uia：证明链被重排
+    assert text == "clip text"
+
+
+def test_capture_default_chain_uia_first(monkeypatch):
+    """未收录应用走 auto 链：UIA 优先（有文本时不碰剪贴板）。"""
+    _patch_helpers(monkeypatch, uia_text="UIA selected")
+    monkeypatch.setattr(sel, "foreground_app_name", lambda: "whatever.exe")
+    cap = sel.SelectionCapturer()
+    text, src = cap.capture(clipboard=_FakeClipboard([]))
+    assert (text, src) == ("UIA selected", "uia")
+
+
+class _FakeGuiInfo:
+    def __init__(self, focus=0, active=0):
+        self.hwndFocus = focus
+        self.hwndActive = active
+
+
+def test_resolve_copy_target_prefers_focus():
+    """WM_COPY 目标：hwndFocus 优先 → hwndActive 兜底 → 顶层窗口。"""
+    fg = 111
+    fn = lambda tid: (True, _FakeGuiInfo(focus=222, active=333))
+    assert sel._resolve_copy_target(fg, thread_info_fn=fn) == 222
+    fn = lambda tid: (True, _FakeGuiInfo(focus=0, active=333))
+    assert sel._resolve_copy_target(fg, thread_info_fn=fn) == 333
+    fn = lambda tid: (True, _FakeGuiInfo(focus=0, active=0))
+    assert sel._resolve_copy_target(fg, thread_info_fn=fn) == fg
+    # 探测失败 / 抛异常 → 退回顶层窗口
+    assert sel._resolve_copy_target(fg, thread_info_fn=lambda tid: (False, None)) == fg
+    def boom(tid):
+        raise RuntimeError("x")
+    assert sel._resolve_copy_target(fg, thread_info_fn=boom) == fg
+
+
+# ---- UIA 后代扫描（有界 BFS）单测：注入假 uiautomation 模块 ----
+class _FakeTextRange:
+    def __init__(self, text):
+        self._t = text
+
+    def GetText(self, _n):
+        return self._t
+
+
+class _FakeTextPattern:
+    def __init__(self, text):
+        self._t = text
+
+    def GetSelection(self):
+        return [_FakeTextRange(self._t)]
+
+
+class _FakeNode:
+    def __init__(self, text="", children=(), parent=None):
+        self._text = text
+        self._kids = list(children)
+        self._parent = parent
+
+    def GetPattern(self, _pid):
+        return _FakeTextPattern(self._text) if self._text else None
+
+    def GetParentControl(self):
+        return self._parent
+
+    def GetChildren(self):
+        return list(self._kids)
+
+
+def _install_fake_uia(monkeypatch, focus_node):
+    fake = types.SimpleNamespace(
+        PatternId=types.SimpleNamespace(TextPattern=42),
+        GetFocusedControl=lambda: focus_node,
+    )
+    monkeypatch.setitem(sys.modules, "uiautomation", fake)
+
+
+def test_uia_finds_text_in_descendants(monkeypatch):
+    """选区挂在焦点控件的后代节点（祖先链全空）→ BFS 扫描命中。"""
+    leaf = _FakeNode(text="desc text")
+    mid = _FakeNode(children=[leaf])
+    focus = _FakeNode(children=[mid])
+    _install_fake_uia(monkeypatch, focus)
+    assert sel.read_uia_selection() == "desc text"
+
+
+def test_uia_finds_text_in_ancestor(monkeypatch):
+    """选区挂在祖先（浏览器/PDF 常见）→ 向上 3 层命中。"""
+    parent = _FakeNode(text="anc text")
+    focus = _FakeNode(parent=parent)
+    _install_fake_uia(monkeypatch, focus)
+    assert sel.read_uia_selection() == "anc text"
+
+
+def test_uia_descendant_scan_bounded(monkeypatch):
+    """后代扫描有界（24 节点）：文本藏在第 30 个孩子里不拖垮取词。"""
+    kids = [_FakeNode() for _ in range(30)]
+    kids[29] = _FakeNode(text="far away")
+    focus = _FakeNode(children=kids)
+    _install_fake_uia(monkeypatch, focus)
+    assert sel.read_uia_selection() == ""           # 超界文本不命中、不报错
+
+
+def test_uia_no_focus_returns_empty(monkeypatch):
+    """取不到焦点控件（桌面切换瞬间）→ 安静返回空。"""
+    _install_fake_uia(monkeypatch, None)
+    assert sel.read_uia_selection() == ""
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

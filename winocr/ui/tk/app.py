@@ -130,6 +130,25 @@ class TkUi(UiAdapter):
         except Exception as e:
             logger.warning("[托盘] 初始化失败（忽略）: %s", e)
 
+        # 自动划词（鼠标钩子，默认关）：划选松开/双击后自动取词翻译。
+        # 初始化放在主循环前；开关/延时经 CONFIG_CHANGED 热同步（_sync_auto_selection）。
+        self._auto_sel = None
+        try:
+            from ...services.capture.auto_select import AutoSelectionHook
+
+            self._auto_sel = AutoSelectionHook(
+                self._on_auto_selection,
+                log=self._sel_log,
+                enabled_fn=lambda: self.app.config.selection.enabled,
+                busy_fn=self._busy.is_set,
+                dblclick_fn=lambda: self.app.config.selection.dblclick,
+                delay_ms_fn=lambda: self.app.config.selection.delay_ms,
+            )
+            if self.app.config.selection.enabled and self._auto_sel.start():
+                _sel_log_static("auto-selection hook enabled", logging.INFO)
+        except Exception as e:
+            logger.warning("[自动划词] 初始化失败（忽略，Ctrl+Shift+D 仍可用）: %s", e)
+
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
         self._start_pump()  # 主线程启动跨线程 UI 队列泵
         from ...version import __version__
@@ -312,6 +331,10 @@ class TkUi(UiAdapter):
     def _wire_events(self) -> None:
         bus = self.app.bus
         bus.subscribe(Events.STATUS, lambda t: self.post(self.window.set_status, t))
+        # 配置保存后热同步自动划词钩子（设置里开关/改延时不需重启程序）
+        bus.subscribe(
+            Events.CONFIG_CHANGED, lambda _cfg: self.post(self._sync_auto_selection)
+        )
         bus.subscribe(
             Events.ERROR, lambda t: self.post(self.window.set_status, f"❌ {t}")
         )
@@ -664,13 +687,60 @@ class TkUi(UiAdapter):
             target=self._capture_and_translate, daemon=True, name="winocr-selcap"
         ).start()
 
-    def _capture_and_translate(self) -> None:
-        """工作线程体：取词 → 投递主线程翻译弹图。"""
+    def _on_auto_selection(self, kind: str) -> None:
+        """自动划词手势命中（钩子工作线程回调，须立即返回）。
+
+        与热键入口共用取词/翻译链路（去抖/busy/工作线程全一致），差异只在：
+          - 不弹「取词中」占位贴条（划选频繁，闪窗反而扰人）；
+          - 取词为空/出错只记日志不弹窗（自动场景静默跳过，见 _capture_and_translate）。
+        去抖与热键共用 _sel_last_ts：双击后接拖选、热键+划选同时发生等只取一次。
+        """
+        now = time.monotonic()
+        if now - getattr(self, "_sel_last_ts", 0.0) < 0.8:
+            self._sel_log("auto: debounced, skipped")
+            return
+        self._sel_last_ts = now
+        if self._busy.is_set():
+            self._sel_log("auto: busy, skipped")
+            return
+        threading.Thread(
+            target=self._capture_and_translate,
+            kwargs={"auto_mode": True},
+            daemon=True,
+            name="winocr-selcap",
+        ).start()
+
+    def _sync_auto_selection(self) -> None:
+        """配置变更后热同步自动划词钩子（主线程）：开→启动，关→卸钩。"""
+        hook = getattr(self, "_auto_sel", None)
+        if hook is None:
+            return
         try:
-            self._sel_log("worker: capture start")
+            enabled = bool(self.app.config.selection.enabled)
+            if enabled and not hook.is_running():
+                ok = hook.start()
+                self._sel_log("auto-selection: start -> %s" % ok)
+            elif not enabled and (hook.is_running() or hook._pump_thread is not None):
+                hook.stop()
+                self._sel_log("auto-selection: stopped")
+        except Exception as e:
+            self._sel_log("auto-selection: sync error %r" % (e,))
+
+    def _capture_and_translate(self, auto_mode: bool = False) -> None:
+        """工作线程体：取词 → 投递主线程翻译弹图。
+
+        ``auto_mode=True``（自动划词触发）时静默策略：取词为空/出错只写日志
+        不弹贴条 —— 划选频繁发生，「没有可翻译的文本」这类弹窗在自动场景
+        等于骚扰；且做 1.5s 内同原文去重（双击+拖选连发只译一次）。
+        """
+        try:
+            self._sel_log("worker: capture start (auto=%s)" % auto_mode)
             text, src = self._capture_selection()
             self._sel_log("worker: capture done src=%s len=%d" % (src, len(text)))
             if not text:
+                if auto_mode:
+                    self._sel_log("worker: auto empty text, silent skip")
+                    return
                 self.post(
                     self.window.show_sticker,
                     "",
@@ -678,10 +748,18 @@ class TkUi(UiAdapter):
                 )
                 self._sel_log("worker: no-text sticker posted")
                 return
+            if auto_mode:
+                last_text, last_ts = getattr(self, "_auto_last", ("", 0.0))
+                if text.strip() == last_text and time.monotonic() - last_ts < 1.5:
+                    self._sel_log("worker: auto duplicate text, skipped")
+                    return
+                self._auto_last = (text.strip(), time.monotonic())
             self._sel_log("key-trigger src=%s len=%d -> translate" % (src, len(text)))
             self.post(self._translate_to_sticker, text, "划词")
         except Exception as e:
             self._sel_log("worker: capture crashed: %r" % (e,))
+            if auto_mode:
+                return
             self.post(
                 self.window.show_sticker,
                 "",
@@ -796,12 +874,12 @@ class TkUi(UiAdapter):
             text, note=note, target=target, explicit=(target is not None)
         )
 
-    # ---- 划词翻译（按键触发：Ctrl+Shift+D → 主线程取词 → 弹贴图） ----
-    # 取词经 self.post(after(0)) 在主线程执行：用户松开热键、贴图尚未弹出，
-    # 焦点仍在目标软件，可读到屏幕任意处新选中文本；贴图窗口去掉 lift() 不夺焦点。
-    # 3.4.3 起取消「鼠标钩子自动划词」（左键松开 / Alt+右键 常驻监听）——
-    # 钩子方案带来误触、busy 冲突、与系统右键菜单打架等问题。
-    # 现在只保留最直接的一条路：选中文字 → 按 Ctrl+Shift+D → 弹贴图。
+    # ---- 划词翻译（两条触发路径共用同一取词/翻译/贴条链路） ----
+    # 路径 1（始终可用）：选中文字 → Ctrl+Shift+D → 弹贴图（_on_hotkey_selection）。
+    # 路径 2（默认关，设置里开启）：划选松开 / 双击 → 自动弹贴图（自动划词钩子，
+    #   services/capture/auto_select.py；防误触见该模块与 SelectionConfig）。
+    # 取词本身在独立工作线程执行：用户按键/松开鼠标瞬间目标软件仍持有焦点，
+    # UIA 直读与剪贴板兜底都能读到屏幕任意处最新选中文本；贴条不夺焦点。
     def _sel_log(self, msg: str) -> None:
         """划词链路诊断日志（winocr.selection 域）。
 
@@ -920,6 +998,13 @@ class TkUi(UiAdapter):
         if getattr(self, "_exiting", False):
             return
         self._exiting = True
+        # 先摘自动划词鼠标钩子：避免退出瞬间钩子回调访问已销毁对象/拖慢系统鼠标
+        try:
+            hook = getattr(self, "_auto_sel", None)
+            if hook is not None:
+                hook.stop()
+        except Exception:
+            pass
         try:
             tts = self.app.services.get("tts")
             if tts is not None:

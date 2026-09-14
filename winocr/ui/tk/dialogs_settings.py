@@ -935,6 +935,52 @@ def open_api_settings(window) -> None:
         justify=tk.LEFT,
     ).grid(row=12, column=0, columnspan=3, sticky=tk.W, pady=(10, 0))
 
+    # ================= 划词翻译（自动取词） =================
+    p6 = _ScrollableFrame(nb)
+    nb.add(p6, text="划词翻译")
+
+    sel_cfg = cfg.selection
+    ttk.Label(
+        p6.body,
+        text="开启后：在任意软件中用鼠标划选文字，松开即自动取词翻译；"
+        "双击单词也可触发。无需再按 Ctrl+Shift+D，也不依赖 Ctrl+C。",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+        wraplength=520,
+        justify=tk.LEFT,
+    ).grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=(0, 10))
+
+    sel_enabled = tk.BooleanVar(value=bool(sel_cfg.enabled))
+    ttk.Checkbutton(
+        p6.body, text="自动划词（划选松开后自动翻译）", variable=sel_enabled
+    ).grid(row=1, column=0, columnspan=3, sticky=tk.W)
+
+    sel_dbl = tk.BooleanVar(value=bool(sel_cfg.dblclick))
+    ttk.Checkbutton(
+        p6.body, text="双击取词（双击单词后自动翻译）", variable=sel_dbl
+    ).grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=(2, 0))
+
+    ttk.Label(p6.body, text="松开后稳定等待 (毫秒)").grid(
+        row=3, column=0, sticky=tk.W, pady=(10, 0)
+    )
+    sel_delay = tk.IntVar(value=int(sel_cfg.delay_ms))
+    ttk.Spinbox(
+        p6.body, from_=0, to=2000, increment=50, width=7, textvariable=sel_delay
+    ).grid(row=3, column=1, sticky=tk.W, padx=(8, 0), pady=(10, 0))
+
+    ttk.Label(
+        p6.body,
+        text="防误触保护（内置，无需设置）：\n"
+        "  · 划选位移 ≥ 10px 才触发，普通点按不会误翻译\n"
+        "  · 本程序自身窗口内的操作不触发\n"
+        "  · 取词 / 翻译进行中不重复触发\n"
+        "  · 相同文本 1.5 秒内不重复翻译\n\n"
+        "手动划词热键 Ctrl+Shift+D 始终可用，不受此开关影响。",
+        foreground=theme.TEXT_MUTED,
+        font=theme.UI_FONT_SMALL,
+        justify=tk.LEFT,
+    ).grid(row=4, column=0, columnspan=3, sticky=tk.W, pady=(10, 0))
+
     # ================= 翻译生效预览 =================
     def _refresh_eff(*_) -> None:
         eff = app.effective_translate_llm()
@@ -950,7 +996,7 @@ def open_api_settings(window) -> None:
     _refresh_eff()
 
     # ---- 设置内搜索（P2-1）：遍历五个页签的 Label/Checkbutton 文本 ----
-    _search_tabs = [p_ai, p2, p3, p4, p5]
+    _search_tabs = [p_ai, p2, p3, p4, p5, p6]
 
     def _do_search(*_) -> None:
         q = (search_var.get() or "").strip().lower()
@@ -1041,6 +1087,14 @@ def open_api_settings(window) -> None:
         except Exception:
             pass
         cfg.tts.auto_read = bool(tts_auto.get())
+
+        # ---- 划词翻译（自动取词） ----
+        cfg.selection.enabled = bool(sel_enabled.get())
+        cfg.selection.dblclick = bool(sel_dbl.get())
+        try:
+            cfg.selection.delay_ms = max(0, min(2000, int(sel_delay.get() or 0)))
+        except Exception:
+            pass
 
         app.apply_config()  # 一处生效：重新注入所有服务并落盘
         window.refresh_engine_label()
