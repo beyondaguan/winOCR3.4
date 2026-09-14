@@ -5,15 +5,15 @@
 与 WinOCR OCR+翻译工作流集成。模型在首次翻译时惰性加载，注册表扫描阶段
 不触发重型依赖导入（与 argos.py 的 ctranslate2 同模式）。
 
-硬件适配（R5 5500 + GT 710 亮机卡）：
-  - n_gpu_layers=0：完全禁用 GPU 卸载（GT 710 Kepler 架构算力不如 CPU AVX2）
-  - n_threads=6：R5 5500 六核全开
-  - n_ctx=2048：翻译场景够用，内存占用小
+硬件适配（自动探测 + 环境变量覆盖）：
+  - n_gpu_layers：检测到 NVIDIA GPU 时自动 = 99（全层卸载），否则 = 0
+  - n_threads：物理核数（封顶 8，超线程不计），环境变量可覆盖
+  - n_ctx：内存 ≥16GB → 8192，≥8GB → 4096，否则 2048
 
-可通过环境变量微调：
-  WINOCR_LLAMA_THREADS    (默认 6)
-  WINOCR_LLAMA_CTX        (默认 2048)
-  WINOCR_LLAMA_GPU_LAYERS (默认 0)
+可通过环境变量微调（显式设置后覆盖自动探测）：
+  WINOCR_LLAMA_THREADS    (默认自动探测)
+  WINOCR_LLAMA_CTX        (默认自动探测)
+  WINOCR_LLAMA_GPU_LAYERS (默认自动探测)
   MKL_THREADING_LAYER     (默认 TBB，见下方说明)
 """
 
@@ -35,10 +35,16 @@ from .base import TranslateEngine
 
 logger = logging.getLogger(__name__)
 
-# ---- 推理参数（可被环境变量覆盖）----
-_DEFAULT_THREADS = int(os.environ.get("WINOCR_LLAMA_THREADS", "6"))
-_DEFAULT_CTX = int(os.environ.get("WINOCR_LLAMA_CTX", "2048"))
-_DEFAULT_GPU_LAYERS = int(os.environ.get("WINOCR_LLAMA_GPU_LAYERS", "0"))
+# ---- 推理参数（自动探测 + 环境变量覆盖）----
+# 延迟导入 hardware 避免循环依赖（hardware 内部零重型依赖）
+from ...core.hardware import suggest_cpu_threads, suggest_ctx_window, has_nvidia_gpu
+
+_DEFAULT_THREADS = int(os.environ.get("WINOCR_LLAMA_THREADS",
+                                       str(suggest_cpu_threads(max_threads=8))))
+_DEFAULT_CTX = int(os.environ.get("WINOCR_LLAMA_CTX",
+                                   str(suggest_ctx_window(default=2048))))
+_DEFAULT_GPU_LAYERS = int(os.environ.get("WINOCR_LLAMA_GPU_LAYERS",
+                                          "99" if has_nvidia_gpu() else "0"))
 
 _LANG_NAMES = {
     "zh-CN": "中文",

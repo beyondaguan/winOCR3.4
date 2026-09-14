@@ -27,12 +27,15 @@ logger = logging.getLogger(__name__)
 # ----------------------------------------------------------------------------
 # 推理超参（与 argostranslate 1.11 默认一致，确保输出逐字一致）
 # ----------------------------------------------------------------------------
+from ...core.hardware import suggest_cpu_threads
+
 _BEAM_SIZE = 4
 _LENGTH_PENALTY = 0.2
 _BATCH_SIZE = 32
 _COMPUTE_TYPE = "auto"
 _INTER_THREADS = 1
-_INTRA_THREADS = min(os.cpu_count() or 1, 4)
+# intra_threads 负责算子内并行（矩阵乘），封顶 8 是 ctranslate2 的收益上限
+_INTRA_THREADS = suggest_cpu_threads(max_threads=8)
 
 _SENT_CJK = re.compile(r"(?<=[。！？；])")
 _SENT_LATIN = re.compile(r"(?<=[.!?;])\s+")

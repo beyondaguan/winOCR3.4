@@ -1,5 +1,49 @@
 # WinOCR 更新日志
 
+## 3.4.30 — 硬件自动探测 + 跨环境安装脚本修复（2026-09-14）
+
+> 让 WinOCR 在不同 CPU / GPU / 内存 / 网络环境下开箱即用，不再写死 R5 5500 六核。新增 `hardware.py` 自动探测物理核数 / GPU 架构 / 内存大小；安装脚本 pip 和 conda 镜像从「国内两源」扩展到「国内三源 + 官方回退链」，海外机器和国内镜像全挂时不再安装失败。230 用例全过。
+
+### ✨ 新功能：硬件自动探测（让代码自己适应机器）
+
+**新增 `winocr/core/hardware.py` — 跨机型自适配基础设施**
+- `suggest_cpu_threads()`：物理核数（psutil 拿不到时退化为逻辑核），封顶 8（llama.cpp / ctranslate2 超过 8 核收益递减）
+- `has_nvidia_gpu()`：nvidia-smi 查 GPU 型号 + compute_cap，**Kepler/Pascal 老卡（算力 ≤ 6.1，GT 710/GTX 750 等）自动过滤**——FP16 无硬件加速，GPU 跑 FP32 反而比 CPU AVX2 慢 2~3 倍；Volta+（算力 ≥ 7.0，RTX 20xx/30xx/40xx）才走 GPU
+- `suggest_ctx_window()`：4GB→2048，8GB→4096，16GB+→8192（ctypes 调 GlobalMemoryStatusEx 拿物理内存）
+- 所有探测结果只作为 fallback——用户设了环境变量（`WINOCR_LLAMA_THREADS` / `WINOCR_LLAMA_GPU_LAYERS` / `WINOCR_LLAMA_CTX`）就覆盖自动值
+
+**llama.cpp 引擎（翻译 + 对话）从写死 6 线程改为自动探测**
+- `_DEFAULT_THREADS = 6` → `suggest_cpu_threads()`
+- `_DEFAULT_GPU_LAYERS = 0` → `has_nvidia_gpu() ? 99 : 0`
+- `_DEFAULT_CTX = 2048` → `suggest_ctx_window()`
+- 文件：`winocr/services/translate/llama_cpp.py`、`winocr/services/ai/llama_cpp_chat.py`
+
+**ctranslate2（Argos）intra_threads 从封顶 4 改为封顶 8**
+- 16 核机器原来只跑 4 线程，翻译速度差 3~4 倍；ctranslate2 实测 8 线程仍有收益
+- 文件：`winocr/services/translate/argos.py`
+
+### 🔧 安装脚本跨环境修复
+
+**install_all.bat — pip 镜像从 2 级回退扩展到 4 级 + Python 版本检查**
+- 原：阿里云 → 清华（海外机器两源都拉不到 → 安装失败）
+- 新：阿里云 → 清华 → **中科大** → **PyPI 官方**（`--default-timeout=60` 防 5 秒超时就放弃）
+- 新增 Python 版本检查：< 3.10 直接报错退出（rapidocr ≥3.9.0 / onnxruntime ≥1.23.2 要求 Python 3.10+）
+- pip upgrade 失败不再中断安装（只记警告，继续装 requirements）
+- 文件：`install_all.bat`
+
+**download_all_models.py — conda 镜像从 3 源扩展到 4 源（含官方回退）**
+- 原：南大 → 华为云 → 中科大（海外机器三源都拉不到 → llama-cpp-python 装不了）
+- 新：南大 → 华为云 → 中科大 → **conda-forge 官方**（`https://conda.anaconda.org/conda-forge/win-64/`）
+- 文件：`tools/download_all_models.py`
+
+### 📄 文档同步
+
+- 新增 `docs/cross-hardware-adaptation.md`：完整跨硬件适配说明（探测规则、GPU 老卡过滤逻辑、回退链设计、requirements 兼容性矩阵、已知不兼容场景）
+- `requirements.txt` llama.cpp 注释更新：标注硬件自动探测行为 + 文档引用
+- `CHANGELOG.md` 本条目
+
+---
+
 ## 3.4.29 — 划词翻译增强：移植取词修复 + 自动划词回归（2026-09-13）
 
 > 吸收同源参考项目划词翻译的成熟实现：修掉「Ctrl+C 注入从未生效」的致命结构体缺陷，补齐 UIA 后代扫描与按应用智能取词策略；同时以「默认关 + 防误触闸门」回归自动划词——鼠标划选松开 / 双击即翻译，不再依赖手动按 Ctrl+Shift+D。249 用例全过。

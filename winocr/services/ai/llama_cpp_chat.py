@@ -8,10 +8,10 @@ OpenAiCompatProvider 同语义）。不支持视觉（supports_vision=False）�
 注意：翻译专用模型（如 HY-MT1.5-1.8B）在 AI 对话面板上的表现有限；
 若需高质量对话，建议换用通用 instruct 模型（如 Qwen2.5-1.5B-Instruct）。
 
-可通过环境变量微调：
-  WINOCR_LLAMA_THREADS    (默认 6)
-  WINOCR_LLAMA_CTX        (默认 2048)
-  WINOCR_LLAMA_GPU_LAYERS (默认 0)
+可通过环境变量微调（显式设置后覆盖自动探测）：
+  WINOCR_LLAMA_THREADS    (默认自动探测：物理核数，封顶 8)
+  WINOCR_LLAMA_CTX        (默认自动探测：内存 ≥16GB→8192，≥8GB→4096，否则 2048)
+  WINOCR_LLAMA_GPU_LAYERS (默认自动探测：有 NVIDIA GPU → 99，否则 0)
   MKL_THREADING_LAYER     (默认 TBB，见下方说明)
 """
 
@@ -39,9 +39,15 @@ _DEFAULT_SYSTEM = (
     "请用用户使用的语言作答，简洁、准确、直接给结论。"
 )
 
-_DEFAULT_THREADS = int(os.environ.get("WINOCR_LLAMA_THREADS", "6"))
-_DEFAULT_CTX = int(os.environ.get("WINOCR_LLAMA_CTX", "2048"))
-_DEFAULT_GPU_LAYERS = int(os.environ.get("WINOCR_LLAMA_GPU_LAYERS", "0"))
+# ---- 推理参数（自动探测 + 环境变量覆盖）----
+from ...core.hardware import suggest_cpu_threads, suggest_ctx_window, has_nvidia_gpu
+
+_DEFAULT_THREADS = int(os.environ.get("WINOCR_LLAMA_THREADS",
+                                       str(suggest_cpu_threads(max_threads=8))))
+_DEFAULT_CTX = int(os.environ.get("WINOCR_LLAMA_CTX",
+                                   str(suggest_ctx_window(default=2048))))
+_DEFAULT_GPU_LAYERS = int(os.environ.get("WINOCR_LLAMA_GPU_LAYERS",
+                                          "99" if has_nvidia_gpu() else "0"))
 
 
 class LlamaCppProvider(AiProvider):

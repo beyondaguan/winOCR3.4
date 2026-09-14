@@ -58,17 +58,19 @@ WHEEL_NAME = "llama_cpp_python-0.3.35-py3-none-win_amd64.whl"
 WHEEL_GH_PATH = ("https://github.com/abetlen/llama-cpp-python/releases/"
                  "download/v0.3.35/" + WHEEL_NAME)
 
-# --- Domestic, non-GitHub source: conda-forge packages mirrored in China ---
+# --- conda-forge mirrors (国内 + 官方，最后一个回退) ---
 # conda-forge ships prebuilt win-64 llama-cpp-python (PyPI only has sdist).
 # The Python bindings are split from the native DLLs (separate conda pkgs);
-# we download all of them from Chinese university/cloud mirrors and assemble
-# into the current Python environment:
-#   Lib/site-packages/llama_cpp/**  (bindings + dist-info)
-#   <prefix>/Library/bin/*.dll      (llama/ggml + MKL + vulkan loader)
+# we download all of them from these mirrors and assemble into the current
+# Python environment. Mirrors are tried in order; the last one (conda-forge
+# official) works everywhere but is slower in China.
 CONDA_MIRRORS = [
+    # 国内镜像（速度快，海外机器可能拉不到）
     "https://mirror.nju.edu.cn/anaconda/cloud/conda-forge/win-64/",
     "https://mirrors.huaweicloud.com/anaconda/cloud/conda-forge/win-64/",
     "https://mirrors.ustc.edu.cn/anaconda/cloud/conda-forge/win-64/",
+    # 官方仓库（国内镜像全挂时的最终回退）
+    "https://conda.anaconda.org/conda-forge/win-64/",
 ]
 # build string per CPython version (conda-forge 0.3.35, build 0)
 _CONDA_LCP_BUILDS = {

@@ -24,16 +24,23 @@ sentencepiece>=0.2.0
 # ---- 翻译轴 · 源语言检测（langid，轻量，只分中英；缺失时回落字符占比法）----
 langid>=1.1.6
 
-# ---- 翻译/对话轴 · llama.cpp 插件（本地离线，GGUF 量化模型，纯 CPU）----
+# ---- 翻译/对话轴 · llama.cpp 插件（本地离线，GGUF 量化模型）----
 # 适配 HY-MT1.5-1.8B-Q4_K_M 等翻译模型，也支持 Qwen2.5-1.5B 等通用对话模型
-# 模型文件放 models/llama/ 目录；n_gpu_layers=0 禁用 GPU（GT 710 负优化）
-# 环境变量微调：WINOCR_LLAMA_THREADS / WINOCR_LLAMA_CTX / WINOCR_LLAMA_GPU_LAYERS
+# 模型文件放 models/llama/ 目录
+#
+# 硬件自动探测（3.4.30 起）：
+#   - CPU 线程数：物理核数（封顶 8），跨机型自动适配
+#   - GPU layers：检测到 NVIDIA Volta+（算力 ≥ 7.0）自动 = 99（全层卸载）；
+#     Kepler/Pascal（GT 710/GTX 750 等老卡）自动过滤走 CPU，反而更快
+#   - ctx 窗口：内存 ≥16GB → 8192，≥8GB → 4096，否则 2048
+#   - 用户可通过 WINOCR_LLAMA_THREADS / WINOCR_LLAMA_GPU_LAYERS / WINOCR_LLAMA_CTX 覆盖
 #
 # llama-cpp-python 在 PyPI 只有源码包，直接 pip 安装需要 C++ 编译器，故默认不装。
 # 安装方式（无需 Miniconda、无需编译器、不经 GitHub）：
 #     python tools\download_all_models.py wheel
-# 或直接运行 install_all.bat / setup.bat（自动执行上述步骤，从国内 conda 镜像组装）
-# 详见 docs/llama-cpp-python-cn-mirror.md
+# 或直接运行 install_all.bat / setup.bat（自动执行上述步骤，从国内 conda 镜像组装，
+# 国内镜像全挂时自动回退 conda-forge 官方仓库）
+# 详见 docs/llama-cpp-python-cn-mirror.md 和 docs/cross-hardware-adaptation.md
 #
 # llama-cpp-python>=0.3.0
 
