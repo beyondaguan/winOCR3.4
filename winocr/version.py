@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """版本信息（单一真相来源，pyproject 与 UI 都从这里读）。"""
 
-__version__ = "3.4.30"
+__version__ = "3.4.31"
 __version_name__ = "截图识字 · 离线翻译 · AI 解读"
-__release_date__ = "2026-09-14"
+__release_date__ = "2026-09-16"
 
 # 相对 3.0 的架构变化摘要（UI「关于」对话框显示）
 HIGHLIGHTS = [
+    "3.4.31 llama.cpp CPU 内核自动升级：一键安装自动换装官方多变体包（GGML_BACKEND_DL，14 个按代际命名的内核运行时自选），conda-forge SSE2 基线 3.3 tok/s → AVX 原生 18.1 tok/s（老 CPU 提速 5.5 倍）；新增 tools/fix_llama_avx.py（--status/--rollback/--offline 离线包）+ services/llama_backend.py 后端枚举兼容层 + docs/llama-avx-variants.md 说明",
     "3.4.22 日志与崩溃捕获系统：全局统一日志（RotatingFileHandler 5MB×3份）+ 环境变量/配置覆盖 + sys/threading/tk 三处未处理异常接管 + faulthandler 原生信号捕获 + crash-YYYYMMDD-HHMMSS.log 自动转储（含 traceback + 系统信息 + 线程列表），彻底解决偶发崩溃无迹可寻的问题",
     "3.4.21 TTS 朗读进度蒙版：朗读时在原文/译文区显示淡蓝透亮高亮蒙版，读到哪里蒙版跟到哪里；edge-tts 按句 chunk 粒度回调进度，SAPI 订阅 SpeakProgress 逐词事件回调；蒙版随朗读自动滚动定位，朗读结束/停止自动清除",
     "3.4.20 蒙版翻译字号自适应：逐行按「可用宽+译文字数」算字号，取『铺满宽度』与『OCR行高1:1上限』较小者——长译文铺满不空旷、短译文封顶不巨大；追加『选区均行高×1.3』约束防 OCR 检测框膨胀撑爆；FALLBACK 去掉选区高×0.06 巨型系数（根因）；位置仍逐行对齐 OCR 原行（原地覆盖）",

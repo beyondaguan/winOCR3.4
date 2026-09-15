@@ -32,6 +32,7 @@ import threading
 os.environ.setdefault("MKL_THREADING_LAYER", "TBB")
 
 from .base import TranslateEngine
+from ..llama_backend import ensure_ggml_backends
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +195,9 @@ class LlamaCppEngine(TranslateEngine):
                 _DEFAULT_CTX,
                 _DEFAULT_GPU_LAYERS,
             )
+            # 官方多变体包（GGML_BACKEND_DL）：先枚举注册 CPU 变体，
+            # 否则 Llama() 报 "no backends are loaded"（静态构建下无害）。
+            ensure_ggml_backends()
             self._llm = Llama(
                 model_path=path,
                 n_ctx=_DEFAULT_CTX,

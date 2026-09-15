@@ -139,6 +139,16 @@ if errorlevel 1 (
     echo        ����ָ����������б��ű���������������ɵ��ļ������ظ����ء�
 )
 
+rem ---- [4b] official llama.cpp multi-variant CPU DLLs (AVX speed-up) ----
+echo.
+echo [4b/5] llama.cpp AVX speed-up package ^(official upstream, ~17MB^)
+echo        Auto-selects the native CPU kernel at runtime; non-fatal on failure.
+%PY% tools\fix_llama_avx.py
+if errorlevel 1 (
+    echo [WARN] AVX package not applied - local LLM keeps the slower
+    echo        baseline kernel. OCR / translate / UI are unaffected.
+)
+
 echo.
 echo [5/5] �Լ�...
 echo ============================================================

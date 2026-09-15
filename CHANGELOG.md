@@ -1,5 +1,43 @@
 # WinOCR 更新日志
 
+## 3.4.31 — llama.cpp CPU 内核自动升级：官方多变体包（2026-09-16）
+
+> 修复 conda-forge 构建只有 SSE2 基线内核的性能问题：0.5B Q4 模型 3.3 tok/s → 18.1 tok/s（i7-2600 实测提速 5.5 倍），运行时按 CPU 微架构自动挑选最优内核（sandybridge / haswell / zen4 / sse42 …共 14 个变体），任何 x64 / ARM64 机器都吃到原生指令集加速。
+
+### 🔍 问题根因
+
+- conda-forge `cpu_mkl` 包按通用基线（x86-64 = SSE2）编译，不含 AVX/AVX2 内核——CPU 明明支持也吃不到，老机器上本地大模型几乎不可用（一句话翻译等 20 秒+）
+- 官方 llama.cpp 发布包采用 `GGML_BACKEND_DL` 模式：CPU 后端拆成按微架构命名的变体 DLL，运行时打分自动挑选——与 Ollama 的 `ggml-cpu-sandybridge.dll` 同一机制
+
+### ✨ 变更
+
+**`tools/fix_llama_avx.py`（新增）— 通用替换工具，四种用法**
+- 默认 `apply`：下载官方 b10588 CPU 包（与 conda-forge 源码同版本，C 接口符号兼容）→ 备份 → 整包替换 → 冒烟检查（backend 数 ≥1，失败自动回滚）
+- `--status`：查看当前内核状态（基线 / 官方多变体、备份目录、llama-cpp-python 版本）
+- `--rollback`：一键回滚到 conda 原始内核（备份仅首次创建、永不覆盖）
+- `--offline <zip>`：无网机器用本地离线包替换
+- 全情况覆盖：x64 与 ARM64 自动选包、llama-cpp-python 未装时跳过、已替换时幂等跳过、代理链下载失败提示离线路径
+- 复用 download_all_models.py 的 4 级 GitHub 代理链 + `vendor/.cache/llama_cpp/` 缓存；输出全 ASCII（GBK/UTF-8 控制台均不乱码）
+
+**`winocr/services/llama_backend.py`（新增）— 后端枚举兼容层**
+- `GGML_BACKEND_DL` 包必须显式调 `ggml_backend_load_all()` 枚举注册后端（llama-cpp-python 按静态构建设计不会自己调，直接加载模型报 "no backends are loaded"）
+- 变体扫描只看「主程序目录 + 当前工作目录」（上游 `ggml-backend-reg.cpp` 的 `load_best`）——Python 进程主程序目录是 `Scripts\`，永远扫不到 `Library/bin` 里的变体，故调用前临时 chdir 到 DLL 目录
+- 翻译引擎与 AI 对话引擎（`translate/llama_cpp.py`、`ai/llama_cpp_chat.py`）加载模型前各接入一行；静态构建 / wheel 布局下无害跳过，幂等
+
+**`install_all.bat` — 新增 4b 步**
+- 依赖安装完成后自动执行替换（~17MB，走代理链）；失败仅警告不阻断安装（OCR/翻译/UI 不受影响，本地大模型退回慢速基线内核）
+
+**`docs/llama-avx-variants.md`（新增）** — 原理、影响面、四种用法、各机器情况处理表、回滚方式与踩坑记录
+
+### 📊 实测（i7-2600 Sandy Bridge，0.5B Q4，4 线程）
+
+| 内核 | 速度 | 整句翻译 |
+|---|---|---|
+| conda-forge 基线（SSE2） | 3.3 tok/s | ~20-40s |
+| 官方多变体（自动选中 sandybridge=AVX） | **18.1 tok/s** | **3.9s（含模型加载）** |
+
+249 用例全过；`--status` / 幂等跳过 / 全新安装模拟 / 冒烟回滚均实测通过。
+
 ## 3.4.30 — 硬件自动探测 + 跨环境安装脚本修复（2026-09-14）
 
 > 让 WinOCR 在不同 CPU / GPU / 内存 / 网络环境下开箱即用，不再写死 R5 5500 六核。新增 `hardware.py` 自动探测物理核数 / GPU 架构 / 内存大小；安装脚本 pip 和 conda 镜像从「国内两源」扩展到「国内三源 + 官方回退链」，海外机器和国内镜像全挂时不再安装失败。230 用例全过。
