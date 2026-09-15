@@ -99,6 +99,9 @@ class TranslateConfig(ConnectableConfig):
     fallback_order: List[str] = field(
         default_factory=lambda: ["glm", "hunyuan", "mymemory", "llama_cpp", "argos"]
     )
+    # 本地大模型推理时的进程 CPU 占用率硬上限（百分比，0 = 不限制）。
+    # Windows Job Object 实现；环境变量 WINOCR_CPU_LIMIT 优先。
+    cpu_limit: int = 0
 
 
 @dataclass
@@ -106,6 +109,8 @@ class AiConfig(ConnectableConfig):
     provider: str = "glm"  # AI 提供方：glm / openai_compat / llama_cpp（本地离线）
     # 连接参数在本配置内直接持有（base_url/api_key/text_model 等）
     # llama_cpp 提供方：text_model 填 GGUF 文件名，api_key/base_url 忽略
+    # 本地 llama_cpp 推理时的 CPU 占用硬上限（同 translate.cpu_limit）
+    cpu_limit: int = 0
 
 
 @dataclass

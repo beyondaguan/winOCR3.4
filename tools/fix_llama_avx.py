@@ -17,6 +17,7 @@ Usage
 -----
     python tools/fix_llama_avx.py                 # apply (default)
     python tools/fix_llama_avx.py --status        # show current state
+    python tools/fix_llama_avx.py --detect        # CPU features + backend
     python tools/fix_llama_avx.py --rollback      # restore baseline DLLs
     python tools/fix_llama_avx.py --offline FILE  # apply from a local zip
                                                   # (no-network machines)
@@ -46,6 +47,7 @@ import sys
 import tempfile
 import urllib.request
 import zipfile
+from ctypes import wintypes
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -309,10 +311,113 @@ def do_rollback(bin_dir: Path) -> None:
         print(f"[fail] rollback error: {e} (manual fix: restore {backup})")
 
 
+# ---------------------------------------------------------------- detect
+def _expected_variant(avx: bool, avx2: bool, avx512: bool) -> str:
+    """Map host CPU features to the ggml-cpu variant ggml will pick."""
+    if avx512:
+        return ("skylakex (or newer: icelake/sapphirerapids/zen4/zen5 - "
+                "runtime picks the best by CPUID score)")
+    if avx2:
+        return ("haswell (or zen1..zen5 on AMD - runtime picks by CPUID "
+                "score)")
+    if avx:
+        return "sandybridge"
+    return "sse42 / x64 baseline"
+
+
+def _os_feature_support() -> tuple[bool, bool, bool]:
+    """Ask Windows what the OS exposes: (AVX, AVX2, AVX512F)."""
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.IsProcessorFeaturePresent.restype = wintypes.BOOL
+    k32.IsProcessorFeaturePresent.argtypes = [wintypes.DWORD]
+    # PF_AVX_INSTRUCTIONS_AVAILABLE = 17, PF_AVX2 = 40, PF_AVX512F = 41
+    return (
+        bool(k32.IsProcessorFeaturePresent(17)),
+        bool(k32.IsProcessorFeaturePresent(40)),
+        bool(k32.IsProcessorFeaturePresent(41)),
+    )
+
+
+def show_detect() -> None:
+    """Report host CPU features, expected variant, and the actually
+    registered backends (what llama.cpp will really compute with)."""
+    print("=== CPU detect ===")
+    machine = platform.machine()
+    print(f"  machine       : {machine}")
+
+    dirs = find_bin_dirs()
+    if not dirs:
+        print("  llama.dll     : not found (nothing to detect)")
+        return
+    bin_dir = dirs[0]
+    print(f"  bin dir       : {bin_dir}")
+
+    if machine in ("AMD64", "x86_64"):
+        avx, avx2, avx512 = _os_feature_support()
+        print(f"  OS support    : AVX={'yes' if avx else 'no'} "
+              f"AVX2={'yes' if avx2 else 'no'} "
+              f"AVX512F={'yes' if avx512 else 'no'}")
+        expect = _expected_variant(avx, avx2, avx512)
+        print(f"  expected pick : ggml-cpu-{expect}")
+    else:
+        print("  OS support    : NEON family (ARM64)")
+        print("  expected pick : armv8.2 / neon variants (runtime picks)")
+
+    # --- what actually registered inside this process -----------------
+    try:
+        import llama_cpp  # noqa: F401  load the DLL chain
+
+        os.add_dll_directory(str(bin_dir))
+        lib = ctypes.CDLL(str(bin_dir / "ggml.dll"))
+        lib.ggml_backend_reg_count.restype = ctypes.c_size_t
+        # note: dev name/description accessors are inline helpers over the
+        # dev->iface vtable (no exports). dev struct layout (x64):
+        #   +0  get_name, +8  get_description, +16 get_memory ...
+        # we read the fn pointers straight out of the struct.
+        _str_fn = ctypes.WINFUNCTYPE(ctypes.c_char_p, ctypes.c_void_p)
+        lib.ggml_backend_dev_count.restype = ctypes.c_size_t
+        lib.ggml_backend_dev_get.restype = ctypes.c_void_p
+        lib.ggml_backend_dev_get.argtypes = [ctypes.c_size_t]
+
+        def _dev_str(dev: int, offset: int) -> str:
+            addr = int.from_bytes(ctypes.string_at(dev + offset, 8), "little")
+            if not addr:
+                return "?"
+            return (_str_fn(addr)(dev) or b"").decode("utf-8", "replace")
+        load_all = lib.ggml_backend_load_all
+        load_all.restype = None
+        old = os.getcwd()
+        os.chdir(bin_dir)
+        try:
+            load_all()
+        finally:
+            os.chdir(old)
+
+        n_dev = int(lib.ggml_backend_dev_count())
+        print(f"  registered    : {n_dev} backend device(s)")
+        for i in range(n_dev):
+            dev = lib.ggml_backend_dev_get(i)
+            if not dev:
+                continue
+            name = _dev_str(dev, 0)
+            desc = _dev_str(dev, 8)
+            print(f"    - {name}: {desc}")
+    except Exception as e:  # noqa: BLE001
+        print(f"  registered    : (probe failed: {e})")
+
+    variants = variants_in(bin_dir)
+    print(f"  installed     : {len(variants)} variant DLL(s)"
+          + (" (official package applied)" if variants
+             else " -> run 'python tools/fix_llama_avx.py' to upgrade"))
+
+
 # ---------------------------------------------------------------- main
 def main(argv: list[str]) -> int:
     if "--status" in argv:
         show_status()
+        return 0
+    if "--detect" in argv:
+        show_detect()
         return 0
     if "--rollback" in argv:
         dirs = find_bin_dirs()

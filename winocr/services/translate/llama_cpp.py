@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 # ---- 推理参数（自动探测 + 环境变量覆盖）----
 # 延迟导入 hardware 避免循环依赖（hardware 内部零重型依赖）
 from ...core.hardware import suggest_cpu_threads, suggest_ctx_window, has_nvidia_gpu
+from ...core.cpu_limit import apply_cpu_limit, effective_percent
 
 _DEFAULT_THREADS = int(os.environ.get("WINOCR_LLAMA_THREADS",
                                        str(suggest_cpu_threads(max_threads=8))))
@@ -76,6 +77,7 @@ class LlamaCppEngine(TranslateEngine):
     def __init__(self):
         self._model_name = ""  # 指定模型文件名（来自 config.text_model）
         self._max_tokens = 512  # 最大生成 token 数
+        self._cpu_limit = 0  # 进程 CPU 占用率硬上限（Job Object，0=不限）
         self._llm = None  # llama_cpp.Llama 实例（惰性初始化）
         self._model_path = ""  # 已加载的模型路径
         self._loaded_for_name = ""  # 已加载实例对应的模型名（防换模型竞态）
@@ -115,6 +117,8 @@ class LlamaCppEngine(TranslateEngine):
             self._wired = True
         if max_output_tokens is not None:
             self._max_tokens = int(max_output_tokens) or 512
+        if kwargs.get("cpu_limit") is not None:
+            self._cpu_limit = int(kwargs["cpu_limit"] or 0)
         if self._model_name:
             self.display_name = f"llama.cpp ({os.path.basename(self._model_name)})"
         else:
@@ -195,6 +199,11 @@ class LlamaCppEngine(TranslateEngine):
                 _DEFAULT_CTX,
                 _DEFAULT_GPU_LAYERS,
             )
+            # CPU 占用硬上限（Windows Job Object）：环境变量 > config.cpu_limit
+            limit = effective_percent() or self._cpu_limit
+            if limit > 0:
+                apply_cpu_limit(limit)
+                logger.info("[llama.cpp] CPU 占用硬上限: %d%%", limit)
             # 官方多变体包（GGML_BACKEND_DL）：先枚举注册 CPU 变体，
             # 否则 Llama() 报 "no backends are loaded"（静态构建下无害）。
             ensure_ggml_backends()

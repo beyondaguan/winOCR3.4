@@ -160,6 +160,7 @@ class App:
             "max_output_tokens": t.max_output_tokens,
             "retry_attempts": t.retry_attempts,
             "retry_backoff": t.retry_backoff,
+            "cpu_limit": t.cpu_limit,  # 本地 llama.cpp 推理 CPU 占用硬上限
         }
 
     def effective_translate_llm(self) -> dict:

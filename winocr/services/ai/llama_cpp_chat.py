@@ -31,6 +31,7 @@ os.environ.setdefault("MKL_THREADING_LAYER", "TBB")
 
 from .base import AiProvider
 from ..llama_backend import ensure_ggml_backends
+from ...core.cpu_limit import apply_cpu_limit, effective_percent
 from ...core.types import ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,7 @@ class LlamaCppProvider(AiProvider):
 
     def __init__(self, history_path: Optional[str] = None) -> None:
         self._model_name = ""
+        self._cpu_limit = 0  # 进程 CPU 占用率硬上限（Job Object，0=不限）
         self.max_output_tokens = 2048
         self.max_context_tokens = 32768
         self.max_turns = 12
@@ -108,6 +110,7 @@ class LlamaCppProvider(AiProvider):
         self.max_turns = config.max_turns
         self.temperature = float(config.temperature)
         self.top_p = float(config.top_p)
+        self._cpu_limit = int(getattr(config, "cpu_limit", 0) or 0)
         if self._model_name:
             self.display_name = f"llama.cpp ({os.path.basename(self._model_name)})"
 
@@ -242,6 +245,11 @@ class LlamaCppProvider(AiProvider):
                 _DEFAULT_CTX,
                 _DEFAULT_GPU_LAYERS,
             )
+            # CPU 占用硬上限（Windows Job Object）：环境变量 > config.cpu_limit
+            limit = effective_percent() or self._cpu_limit
+            if limit > 0:
+                apply_cpu_limit(limit)
+                logger.info("[llama.cpp] CPU 占用硬上限: %d%%", limit)
             # 官方多变体包（GGML_BACKEND_DL）：先枚举注册 CPU 变体，
             # 否则 Llama() 报 "no backends are loaded"（静态构建下无害）。
             ensure_ggml_backends()

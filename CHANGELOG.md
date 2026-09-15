@@ -1,5 +1,29 @@
 # WinOCR 更新日志
 
+## 3.4.32 — CPU 内核检测 + 占用率硬限制（2026-09-16）
+
+> 补全 3.4.31 的可观测性与资源控制：`--detect` 一条命令看清「CPU 支持什么 → 预期选中哪个内核 → 进程内实际注册了谁」；新增 Job Object 硬配额 `cpu_limit`，跑本地大模型时进程 CPU 不再吃满（实测限 40% 时峰值被压在 320%/800% 刻度以内）。
+
+### ✨ `--detect` 检测命令（tools/fix_llama_avx.py）
+
+- 三方对照：OS 报告的指令集（IsProcessorFeaturePresent：AVX=17 / AVX2=40 / AVX512F=41）→ 推导预期变体（sandybridge / haswell / skylakex / zen4 …）→ **进程内真实注册的 backend 设备**（`ggml_backend_dev_count/get` 枚举，dev 结构体 vtable 直接读 name/description——这三个访问器在头文件里是 static inline 不导出）
+- 输出示例：`OS support: AVX=yes AVX2=no` → `expected pick: ggml-cpu-sandybridge` → `registered: CPU: Intel(R) Core(TM) i7-2600`（预期与实际一致即选择正确）
+
+### ✨ CPU 占用率硬限制（winocr/core/cpu_limit.py 新增）
+
+- Windows Job Object CpuRateControl **硬配额**（500ms 调度窗口强制生效），不是降优先级的软手段
+- 配置：`[translate] cpu_limit` / `[ai] cpu_limit`（config.toml，0 = 不限）或环境变量 `WINOCR_CPU_LIMIT`（优先）；自动钳制 10~95
+- translate / ai 两个 llama_cpp 引擎加载模型时自动应用，幂等（同进程同百分比只设一次）
+- 踩坑两个常量：`JobObjectCpuRateControlInformation = 15`（不是 21）、`JOB_OBJECT_CPU_RATE_CONTROL_HARD_LIMIT = 0x4`（0x2 是 WEIGHT_BASED，混用报 ERROR_INVALID_PARAMETER）
+- 单测 7 项全过：设置后用 QueryInformationJobObject 从内核读回配额断言（7000=70%、钳制、幂等、环境变量）
+- 实测（i7-2600，限 40%）：推理期间进程占用峰值 294%（4C8T 满载=800% 刻度，理论上限 320%）从未越界；代价 1.2s → 2.1s/句
+- Win7 等无 CpuRateControl 的系统静默降级（不限制、不影响运行）；Ollama 独立进程不受影响
+
+### 🔧 其他
+
+- `docs/llama-avx-variants.md` 新增第五章（CPU 限制）与 --detect 说明
+- 249 + 7 = 256 用例全过
+
 ## 3.4.31 — llama.cpp CPU 内核自动升级：官方多变体包（2026-09-16）
 
 > 修复 conda-forge 构建只有 SSE2 基线内核的性能问题：0.5B Q4 模型 3.3 tok/s → 18.1 tok/s（i7-2600 实测提速 5.5 倍），运行时按 CPU 微架构自动挑选最优内核（sandybridge / haswell / zen4 / sse42 …共 14 个变体），任何 x64 / ARM64 机器都吃到原生指令集加速。

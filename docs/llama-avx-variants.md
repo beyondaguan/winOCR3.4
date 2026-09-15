@@ -69,12 +69,28 @@ llama-cpp-python 按静态构建设计不会自己调。
 ```bash
 python tools/fix_llama_avx.py                 # 执行替换（默认动作）
 python tools/fix_llama_avx.py --status        # 查看当前内核状态
+python tools/fix_llama_avx.py --detect        # 检测 CPU 能力 + 实际选中的内核
 python tools/fix_llama_avx.py --rollback      # 回滚到原始 conda 内核
 python tools/fix_llama_avx.py --offline 包.zip  # 无网机器：用本地离线包
 ```
 
 任意目录均可运行（脚本内部定位项目根）。重复执行幂等：已替换的机器
 直接跳过。
+
+`--detect` 输出示例（i7-2600）：
+
+```
+=== CPU detect ===
+  machine       : AMD64
+  OS support    : AVX=yes AVX2=no AVX512F=no
+  expected pick : ggml-cpu-sandybridge
+  registered    : 1 backend device(s)
+    - CPU: Intel(R) Core(TM) i7-2600 CPU @ 3.40GHz
+  installed     : 14 variant DLL(s) (official package applied)
+```
+
+「expected pick」按 OS 报告的指令集推导；「registered」是进程内真实
+注册的设备（llama.cpp 真正用它算），两者一致即运行时选择正确。
 
 ### 3) 不同情况的处理
 
@@ -87,7 +103,39 @@ python tools/fix_llama_avx.py --offline 包.zip  # 无网机器：用本地离�
 | 代理全挂 / 无外网 | 提示改用 `--offline`；或保留慢速内核继续用 |
 | 冒烟检查失败（backend 数 = 0） | **自动回滚**到备份，退出码 1 |
 
-## 五、回滚
+## 五、CPU 占用率硬限制（跑大模型不吃满 CPU）
+
+本地推理默认会用满所有核（任务管理器 100%），拖累系统其它操作。
+3.4.32 起支持 Windows Job Object 硬性配额（500ms 调度窗口内强制生效，
+不是降优先级的软手段）：
+
+```toml
+# config.toml
+[translate]
+cpu_limit = 70        # 进程 CPU ≤ 70%（0 = 不限制）
+
+[ai]
+cpu_limit = 70        # 本地 llama_cpp 对话同理
+```
+
+或用环境变量（优先级更高）：
+
+```cmd
+set WINOCR_CPU_LIMIT=70
+```
+
+- 取值范围自动钳制到 10~95；Ollama 是独立进程不受影响。
+- 生效范围是本进程全部线程（llama.cpp 推理线程、ctranslate2 都算）。
+- 实测（i7-2600，限 40%）：推理期间进程占用峰值 294%（4C8T 满载 = 800%
+  刻度），从未越过 320% 理论上限；代价是翻译 1.2s/句 → 2.1s/句。
+- 引擎加载模型时自动应用（translate / ai 的 llama_cpp 引擎均接入），
+  配置读取优先级：环境变量 > config。
+- Win7 等无 CpuRateControl 的系统自动静默降级（不限制，不影响运行）。
+
+实现：`winocr/core/cpu_limit.py`（单测 `tests/test_cpu_limit.py` 用
+QueryInformationJobObject 从内核读回配额验证）。
+
+## 六、回滚
 
 ```bash
 python tools/fix_llama_avx.py --rollback
@@ -99,7 +147,7 @@ python tools/fix_llama_avx.py --rollback
 
 手工方式：把该目录内所有文件复制回 `.venv/Library/bin/` 即可。
 
-## 六、技术细节（踩坑记录）
+## 七、技术细节（踩坑记录）
 
 1. **必须显式枚举后端**：`GGML_BACKEND_DL` 包不再静态内置 CPU 后端，
    llama-cpp-python 直接加载模型会报
@@ -117,7 +165,7 @@ python tools/fix_llama_avx.py --rollback
    结构体与导出符号不保证兼容，混用轻则加载失败重则段错误——所以必须
    下载官方包而不是复制 `ollama` 安装目录里的现成文件。
 
-## 七、与 Ollama 方案的关系
+## 八、与 Ollama 方案的关系
 
 两者互补：
 
