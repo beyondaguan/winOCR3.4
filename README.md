@@ -1,6 +1,6 @@
 # WinOCR 3.4
 
-截图识字 / 离线翻译 / AI 解读 —— 插件化重构版（**当前版本：3.4.29**）。
+截图识字 / 离线翻译 / AI 解读 —— 插件化重构版（**当前版本：3.4.31**）。
 
 纯 Python + Tkinter，无框架。离线 OCR 模型 + Argos 中英离线翻译，断网也能完整运行。
 
@@ -135,6 +135,8 @@ rem 列出资源清单 / 调整线程数 / 只下载不装 wheel
 | [libvulkan-loader-1.4.357.0-h477610d_2.conda](https://mirror.nju.edu.cn/anaconda/cloud/conda-forge/win-64/libvulkan-loader-1.4.357.0-h477610d_2.conda) | vulkan-1.dll | ~0.3 MB |
 
 Python 版本对应的绑定包 build 串：py310→`py310h699e580_0`、py311→`py311h5dfdfe8_0`、py312→`py312ha1a9051_0`、py313→`py313h927ade5_0`、py314→`py314hb98de8c_0`（支持 3.10–3.14）。
+
+> **性能提示**：conda-forge 的 `cpu_mkl` 包只有 SSE2 基线内核，老 CPU 上本地大模型较慢（0.5B 约 3.3 tok/s）。3.4.31 起 `install_all.bat` 会在安装后自动换装官方 llama.cpp 多变体包（运行时按 CPU 微架构自选内核，i7-2600 实测 18.1 tok/s，提速 5.5 倍）；也可手动执行 `python tools/fix_llama_avx.py`（支持 `--status` / `--rollback` / `--offline`），详见 [`docs/llama-avx-variants.md`](docs/llama-avx-variants.md)。
 
 **备选 1：Miniconda + conda 安装**（同样走国内镜像）
 
