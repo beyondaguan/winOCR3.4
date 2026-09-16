@@ -25,7 +25,10 @@ Usage
 Notes
 -----
 * Download goes through the same China proxy chain as
-  tools/download_all_models.py, then direct GitHub; the zip is cached in
+  tools/download_all_models.py (domestic ghproxy nodes first - llama.cpp
+  release binaries have no first-party CN mirror), then direct GitHub.
+  Stream breaks are recovered via HTTP Range resume (.part files) and
+  every download is zip-validated before use; the zip is cached in
   vendor/.cache/llama_cpp/ so re-runs are free.
 * Backups are written to <bin>_backup_baseline/ on the FIRST apply only,
   so a rollback always restores the original set.
@@ -45,6 +48,7 @@ import platform
 import shutil
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 import zipfile
 from ctypes import wintypes
@@ -78,12 +82,18 @@ def find_bin_dirs() -> list[Path]:
     cands.append(ROOT / ".venv" / "Library" / "bin")
     cands.append(Path(sys.prefix) / "Library" / "bin")
 
-    # 2) pip wheel layout: <site-packages>/llama_cpp/lib
+    # 2) pip wheel layout: <prefix>/Lib/site-packages/llama_cpp/lib
+    #    (derived WITHOUT importing llama_cpp - importing it loads llama.dll
+    #    at module import time and fails with RuntimeError on a broken DLL
+    #    chain, which is exactly the state this tool repairs)
+    for sp in (Path(sys.prefix) / "Lib" / "site-packages",
+               ROOT / ".venv" / "Lib" / "site-packages"):
+        cands.append(sp / "llama_cpp" / "lib")
     try:
         import llama_cpp
 
         cands.append(Path(llama_cpp.__file__).parent / "lib")
-    except ImportError:
+    except Exception:  # noqa: BLE001
         pass
 
     seen, out = set(), []
@@ -117,8 +127,8 @@ def show_status() -> None:
         import llama_cpp
 
         print(f"  llama-cpp-python : {llama_cpp.__version__}")
-    except ImportError:
-        print("  llama-cpp-python : NOT INSTALLED (local LLM disabled)")
+    except Exception:  # noqa: BLE001  (ImportError or broken DLL chain)
+        print("  llama-cpp-python : NOT USABLE (local LLM disabled)")
     dirs = find_bin_dirs()
     if not dirs:
         print("  llama.dll        : not found (nothing to do)")
@@ -229,40 +239,105 @@ def apply(offline_zip: str | None = None) -> int:
     return 0
 
 
+def _valid_zip(p: Path) -> bool:
+    """Cheap zip integrity probe: signature + readable central directory."""
+    if not p.is_file() or p.stat().st_size < 1024 * 1024:
+        return False
+    try:
+        with zipfile.ZipFile(p) as zf:
+            return bool(zf.namelist()) and zf.testzip() is None
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def download(dest: Path) -> None:
-    """Download through proxy chain then direct; resumable via cache file."""
-    if dest.is_file() and dest.stat().st_size > 8 * 1024 * 1024:
+    """Download through the China proxy chain (domestic nodes first), then
+    direct GitHub. Resilience rules for flaky links:
+
+    * HTTP Range resume, but ONLY within the same mirror (each host gets
+      its own .part file) - resuming across mirrors would splice a valid
+      prefix from one server onto garbage from another.
+    * A partial that turns out corrupt is deleted, never handed to the
+      next mirror; the finished file replaces any stale cache via
+      os.replace (Windows rename does not overwrite).
+    * HTTP 416 (part at/past EOF): validate the part - accept if it is a
+      good zip, otherwise delete and let the next mirror restart.
+    * Zip validation before accepting: truncated / corrupted downloads
+      are rejected.
+
+    The finished zip is cached in vendor/.cache/llama_cpp/, so re-runs
+    are free.
+    """
+    if _valid_zip(dest):
         print(f"       cached: {dest}")
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
+    # stale untagged .part from pre-host-tagged versions (exact legacy name,
+    # NOT a glob - "*.host.part" would delete valid same-host resume parts)
+    dest.with_suffix(dest.suffix + ".part").unlink(missing_ok=True)
     gh_path = ("https://github.com/ggml-org/llama.cpp/releases/download/"
                f"{LLAMA_TAG}/{dest.name}")
-    part = dest.with_suffix(dest.suffix + ".part")
     last_err: Exception | None = None
     for url in gh_urls(gh_path):
+        host = url.split("/")[2]
+        tag = host.replace(":", "_").replace(".", "_")
+        part = dest.with_suffix(dest.suffix + f".{tag}.part")
         try:
-            print(f"       trying {url.split('/')[2]} ...")
-            req = urllib.request.Request(url, headers=UA)
-            with urllib.request.urlopen(req, timeout=60) as resp, \
-                    open(part, "wb") as out:
-                total = int(resp.headers.get("Content-Length") or 0)
-                done = 0
-                while True:
-                    chunk = resp.read(1024 * 256)
-                    if not chunk:
-                        break
-                    out.write(chunk)
-                    done += len(chunk)
-                    if total:
-                        pct = min(100, done * 100 // total)
-                        print(f"\r       {pct}% ({done // 1048576} MB)",
-                              end="", flush=True)
+            have = part.stat().st_size if part.is_file() else 0
+            resume = have > 0
+            print(f"       trying {host} "
+                  f"({'resume @' + str(have // 1048576) + 'MB' if resume else 'fresh'}) ...")
+            headers = dict(UA)
+            if resume:
+                headers["Range"] = f"bytes={have}-"
+            req = urllib.request.Request(url, headers=headers)
+            try:
+                resp = urllib.request.urlopen(req, timeout=60)
+            except urllib.error.HTTPError as e:
+                if e.code == 416:
+                    # part at/past EOF: complete-but-unverified or garbage
+                    if _valid_zip(part):
+                        os.replace(part, dest)
+                        print()
+                        return
+                    part.unlink(missing_ok=True)
+                    raise RuntimeError("416: partial invalid, will restart")
+                raise
+            with resp:
+                code = getattr(resp, "status", 200)
+                if resume and code == 206:
+                    mode, done = "ab", have
+                else:  # 200 = server ignored Range -> restart cleanly
+                    if resume:
+                        print("       (no resume support, restarting)")
+                    mode, done = "wb", 0
+                total = int(resp.headers.get("Content-Length") or 0) + done
+                with open(part, mode) as out:
+                    while True:
+                        chunk = resp.read(1024 * 256)
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                        done += len(chunk)
+                        if total:
+                            pct = min(100, done * 100 // total)
+                            print(f"\r       {pct}% ({done // 1048576} MB)",
+                                  end="", flush=True)
                 print()
-            part.rename(dest)
+            if not _valid_zip(part):
+                part.unlink(missing_ok=True)
+                raise RuntimeError("zip incomplete/corrupted after download")
+            os.replace(part, dest)
             return
         except Exception as e:  # noqa: BLE001
             last_err = e
-            print(f"       failed: {e}")
+            if part.exists() and not _valid_zip(part):
+                keep = "same-host partial kept for resume"
+                if isinstance(e, RuntimeError) and "corrupted" in str(e):
+                    keep = "partial deleted (corrupt)"
+            else:
+                keep = "no partial"
+            print(f"       failed: {e} ({keep})")
     raise RuntimeError(f"all download attempts failed ({last_err})")
 
 
@@ -369,11 +444,11 @@ def show_detect() -> None:
 
         os.add_dll_directory(str(bin_dir))
         lib = ctypes.CDLL(str(bin_dir / "ggml.dll"))
-        lib.ggml_backend_reg_count.restype = ctypes.c_size_t
         # note: dev name/description accessors are inline helpers over the
         # dev->iface vtable (no exports). dev struct layout (x64):
         #   +0  get_name, +8  get_description, +16 get_memory ...
         # we read the fn pointers straight out of the struct.
+        lib.ggml_backend_reg_count.restype = ctypes.c_size_t
         _str_fn = ctypes.WINFUNCTYPE(ctypes.c_char_p, ctypes.c_void_p)
         lib.ggml_backend_dev_count.restype = ctypes.c_size_t
         lib.ggml_backend_dev_get.restype = ctypes.c_void_p

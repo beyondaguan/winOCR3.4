@@ -58,9 +58,15 @@ llama-cpp-python 按静态构建设计不会自己调。
        Auto-selects the native CPU kernel at runtime; non-fatal on failure.
 ```
 
-- 走与模型下载相同的 4 级 GitHub 代理链（ghproxy.net → gh-proxy.com →
-  ghfast.top → mirror.ghproxy.com → 直连），缓存到
-  `vendor/.cache/llama_cpp/`（重装免下载）。
+- **下载源说明**：llama.cpp 官方发布包**没有第一方国内镜像站**
+  （hf-mirror 只镜像 HuggingFace 模型，npmmirror / ModelScope 均不收
+  GitHub release 二进制）。项目采用 ghproxy 家族国内代理链加速，
+  2026-09 实测排序（快且稳者在前）：
+  `gh-proxy.com → ghproxy.cn → ghfast.top → ghproxy.net → mirror.ghproxy.com → 直连`。
+- **断点续传**：下载写入 `.part` 缓存文件，某一节点断流后，下一个节点
+  从断点继续（HTTP Range 206），不再整包作废；下载完成后做 zip
+  完整性校验（签名 + 中央目录 + CRC），损坏即弃并换节点重试。
+- 缓存目录 `vendor/.cache/llama_cpp/`（重装免下载）。
 - **失败不阻断安装**：仅打印警告，本地大模型退回慢速基线内核，
   OCR / 翻译 / UI 一切正常。
 

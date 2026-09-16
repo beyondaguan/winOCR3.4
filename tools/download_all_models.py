@@ -46,11 +46,16 @@ from tools import download_ocr_model as ocr_dl                     # noqa: E402
 UA = {"User-Agent": "winocr"}
 TIMEOUT = 30
 
-# GitHub proxy prefixes (tried in order, direct URL appended automatically)
+# GitHub proxy prefixes (tried in order, direct URL appended automatically).
+# Note: llama.cpp release binaries have NO first-party China mirror
+# (hf-mirror only mirrors HuggingFace models, npmmirror/ModelScope do not
+# carry GitHub release assets) - the ghproxy family IS the domestic
+# acceleration. Order = fastest/most reliable CN nodes first (2026-09 verified).
 GH_PROXIES = [
-    "https://ghproxy.net/",
     "https://gh-proxy.com/",
+    "https://ghproxy.cn/",
     "https://ghfast.top/",
+    "https://ghproxy.net/",
     "https://mirror.ghproxy.com/",
 ]
 
