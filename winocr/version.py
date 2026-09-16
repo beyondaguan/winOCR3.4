@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """版本信息（单一真相来源，pyproject 与 UI 都从这里读）。"""
 
-__version__ = "3.4.32"
+__version__ = "3.4.33"
 __version_name__ = "截图识字 · 离线翻译 · AI 解读"
 __release_date__ = "2026-09-16"
 
 # 相对 3.0 的架构变化摘要（UI「关于」对话框显示）
 HIGHLIGHTS = [
+    "3.4.33 llama.cpp CPU 内核应用内一键切换（AVX ⇄ MKL）：AI 设置新增「CPU 内核」下拉（官方多变体 AVX 推荐 / MKL 基线 conda），写入 [translate].llama_kernel（环境变量 WINOCR_LLAMA_KERNEL 优先），下次启动本地模型时在 import llama_cpp 之前换装（DLL 入进程后文件被锁不能热切换）；双内核文件集 kernel_sets/ 首跑自举、幂等同步，应用运行中 DLL 被占时静默保持现状",
     "3.4.32 CPU 内核检测与占用率硬限制：fix_llama_avx 新增 --detect（OS 指令集→预期变体→进程内真实注册设备三方对照）；新增 cpu_limit（Windows Job Object CpuRateControl 硬配额，非降优先级软手段），config 的 [translate]/[ai].cpu_limit 或环境变量 WINOCR_CPU_LIMIT 一行配置，实测限 40% 时占用被压在理论上限内、翻译 1.2s→2.1s/句，Win7 自动降级",
     "3.4.31 llama.cpp CPU 内核自动升级：一键安装自动换装官方多变体包（GGML_BACKEND_DL，14 个按代际命名的内核运行时自选），conda-forge SSE2 基线 3.3 tok/s → AVX 原生 18.1 tok/s（老 CPU 提速 5.5 倍）；新增 tools/fix_llama_avx.py（--status/--rollback/--offline 离线包）+ services/llama_backend.py 后端枚举兼容层 + docs/llama-avx-variants.md 说明",
     "3.4.22 日志与崩溃捕获系统：全局统一日志（RotatingFileHandler 5MB×3份）+ 环境变量/配置覆盖 + sys/threading/tk 三处未处理异常接管 + faulthandler 原生信号捕获 + crash-YYYYMMDD-HHMMSS.log 自动转储（含 traceback + 系统信息 + 线程列表），彻底解决偶发崩溃无迹可寻的问题",

@@ -102,6 +102,11 @@ class TranslateConfig(ConnectableConfig):
     # 本地大模型推理时的进程 CPU 占用率硬上限（百分比，0 = 不限制）。
     # Windows Job Object 实现；环境变量 WINOCR_CPU_LIMIT 优先。
     cpu_limit: int = 0
+    # llama.cpp CPU 内核："avx" = 官方多变体包（运行时按指令集自选），
+    # "mkl" = conda-forge 基线。影响翻译与 AI 对话的全部本地 llama 推理；
+    # 在下次启动本地模型时生效（DLL 加载后无法热切换）。
+    # 环境变量 WINOCR_LLAMA_KERNEL 优先。仅当安装过多变体包时可切换。
+    llama_kernel: str = "avx"
 
 
 @dataclass
@@ -413,6 +418,9 @@ class AppConfig:
         mt = os.environ.get("WINOCR_MODEL_TYPE")
         if mt:
             self.ocr.model_type = mt.strip()
+        kk = os.environ.get("WINOCR_LLAMA_KERNEL")
+        if kk:
+            self.translate.llama_kernel = kk.strip().lower()
 
     # ---------------- 保存 ----------------
     def save(self, path: Optional[str] = None) -> str:

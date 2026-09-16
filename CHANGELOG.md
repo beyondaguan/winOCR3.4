@@ -1,5 +1,23 @@
 # WinOCR 更新日志
 
+## 3.4.33 — llama.cpp CPU 内核应用内一键切换（AVX ⇄ MKL）（2026-09-16）
+
+> 3.4.31 换装官方多变体包后，想回到 conda MKL 基线（或再切回来）得跑命令行脚本。本次把它做成 AI 设置里的一个下拉：**官方多变体 AVX（推荐）** / **MKL 基线（conda）**，下次启动本地模型时自动换装，无需命令行。
+
+### ✨ 应用内切换（winocr/services/llama_kernel_switch.py 新增）
+
+- 设置 → API 设置 →「大模型翻译」→ 引擎 llama_cpp，「本地模型」下方新增「CPU 内核」下拉；写入 `[translate].llama_kernel = avx|mkl`（环境变量 `WINOCR_LLAMA_KERNEL` 优先）
+- 同步时机：`ensure_ggml_backends()` 入口最前面执行——必须发生在 `import llama_cpp` **之前**（llama.dll 入进程后文件被锁，WinError 32，不能热切换）；应用运行中换装失败静默保持现状
+- 双内核文件集 `site-packages/llama_cpp/lib/kernel_sets/{avx,mkl}/`：首跑从现场状态自举（avx 集取激活态变体目录、mkl 集优先取 `backup_baseline/`），幂等不覆盖
+- 切换语义：仅替换 `ggml-cpu.dll`（+变体文件）——两内核共用 ggml.dll / llama.dll / mtmd.dll / libomp.dll；MKL 模式额外移除 lib/ 下全部 `ggml-cpu-*.dll`，防止 `ggml_backend_load_all()` 双注册 CPU 后端
+- 从未装过多变体包的机器 avx 集缺失，选 avx 自动保持 MKL（不报错）
+- `sync_kernel()` 幂等：已是目标内核时零文件操作
+
+### ✅ 测试与文档
+
+- 新增 `tests/test_llama_kernel_switch.py` 12 用例（检测/自举/往返切换/幂等/非法值回落），全过
+- `docs/llama-avx-variants.md` 第四节新增「3) 应用内一键切换（3.4.33+）」
+
 ## 3.4.32 — CPU 内核检测 + 占用率硬限制（2026-09-16）
 
 > 补全 3.4.31 的可观测性与资源控制：`--detect` 一条命令看清「CPU 支持什么 → 预期选中哪个内核 → 进程内实际注册了谁」；新增 Job Object 硬配额 `cpu_limit`，跑本地大模型时进程 CPU 不再吃满（实测限 40% 时峰值被压在 320%/800% 刻度以内）。

@@ -299,7 +299,7 @@ def open_api_settings(window) -> None:
     llama_models = sorted(set(llama_models))
 
     llama_frame = ttk.Frame(p2.body)
-    ttk.Label(llama_frame, text="本地模型").pack(side=tk.LEFT)
+    ttk.Label(llama_frame, text="本地模型").grid(row=0, column=0, sticky=tk.W)
     llama_model_var = tk.StringVar(
         value=cfg.translate.text_model or (llama_models[0] if llama_models else "")
     )
@@ -310,7 +310,26 @@ def open_api_settings(window) -> None:
         width=30,
         values=llama_models,
     )
-    model_combo.pack(side=tk.LEFT, padx=(6, 0))
+    model_combo.grid(row=0, column=1, padx=(6, 0), sticky=tk.W)
+
+    # ---- CPU 内核切换（官方多变体 AVX ⇄ conda MKL 基线）----
+    _KERNEL_LABELS = [("avx", "官方多变体 AVX（推荐）"), ("mkl", "MKL 基线（conda）")]
+    kernel_var = tk.StringVar(
+        value=dict(_KERNEL_LABELS).get(
+            cfg.translate.llama_kernel, dict(_KERNEL_LABELS)["avx"]
+        )
+    )
+    ttk.Label(llama_frame, text="CPU 内核").grid(row=1, column=0, sticky=tk.W, pady=(4, 0))
+    ttk.Combobox(
+        llama_frame,
+        textvariable=kernel_var,
+        state="readonly",
+        width=30,
+        values=[lb for _, lb in _KERNEL_LABELS],
+    ).grid(row=1, column=1, padx=(6, 0), sticky=tk.W, pady=(4, 0))
+    ttk.Label(
+        llama_frame, text="（切换在下次启动本地模型时生效，重启应用最稳妥）"
+    ).grid(row=2, column=1, sticky=tk.W)
 
     def _sync_llama_ui(*_):
         eng_name = eng.get().split(" — ")[0].strip()
@@ -1045,6 +1064,9 @@ def open_api_settings(window) -> None:
             t.engine = eng.get().split(" — ")[0].strip()
             if llama_models:
                 t.text_model = llama_model_var.get().strip()
+            t.llama_kernel = (
+                "mkl" if kernel_var.get().startswith("MKL") else "avx"
+            )
             t.target = tgt.get().split(" — ")[0].strip()
             t.auto_translate = auto_t.get()
             t.offline_mode = offline.get()

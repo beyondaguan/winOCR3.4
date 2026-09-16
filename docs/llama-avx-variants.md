@@ -98,7 +98,23 @@ python tools/fix_llama_avx.py --offline 包.zip  # 无网机器：用本地离�
 「expected pick」按 OS 报告的指令集推导；「registered」是进程内真实
 注册的设备（llama.cpp 真正用它算），两者一致即运行时选择正确。
 
-### 3) 不同情况的处理
+### 3) 应用内一键切换（3.4.33+）
+
+设置 → API 设置 →「大模型翻译」页 → 引擎选 llama_cpp 后，**本地模型**
+下方出现「CPU 内核」下拉：**官方多变体 AVX（推荐）** / **MKL 基线（conda）**。
+
+- 写入配置 `[translate].llama_kernel`（环境变量 `WINOCR_LLAMA_KERNEL=avx|mkl`
+  优先），**下次启动本地模型时**由 `ensure_ggml_backends()` 在
+  `import llama_cpp` 之前换装——DLL 入进程后文件被锁，不能热切换；
+  应用运行中换装失败会静默保持现状。
+- 双内核文件集在 `site-packages/llama_cpp/lib/kernel_sets/`（首跑从现场
+  状态自举：avx 集来自激活态的变体目录，mkl 集优先取 `backup_baseline/`）。
+  从未装过多变体包的机器 avx 集缺失，切换自动保持 MKL。
+- 两内核共用 ggml.dll / llama.dll / mtmd.dll / libomp.dll（多变体包版本），
+  仅 ggml-cpu.dll（+变体文件）随选择变化；MKL 模式会从 lib/ 移除全部
+  `ggml-cpu-*.dll`，防止 `ggml_backend_load_all` 双注册 CPU 后端。
+
+### 4) 不同情况的处理
 
 | 机器情况 | 行为 |
 |---|---|
@@ -110,6 +126,24 @@ python tools/fix_llama_avx.py --offline 包.zip  # 无网机器：用本地离�
 | 冒烟检查失败（backend 数 = 0） | **自动回滚**到备份，退出码 1 |
 
 ## 五、CPU 占用率硬限制（跑大模型不吃满 CPU）
+
+### 应用内一键切换（3.4.33+）
+
+设置 → API 设置 →「大模型翻译」页 → 引擎选 llama_cpp 后，**本地模型**
+下方出现「CPU 内核」下拉：**官方多变体 AVX（推荐）** / **MKL 基线（conda）**。
+
+- 写入配置 `[translate].llama_kernel`（环境变量 `WINOCR_LLAMA_KERNEL=avx|mkl`
+  优先），**下次启动本地模型时**由 `ensure_ggml_backends()` 在
+  `import llama_cpp` 之前换装——DLL 入进程后文件被锁，不能热切换；
+  应用运行中换装失败会静默保持现状。
+- 双内核文件集在 `site-packages/llama_cpp/lib/kernel_sets/`（首跑从现场
+  状态自举：avx 集来自激活态的变体目录，mkl 集优先取 `backup_baseline/`）。
+  从未装过多变体包的机器 avx 集缺失，切换自动保持 MKL。
+- 两内核共用 ggml.dll / llama.dll / mtmd.dll / libomp.dll（多变体包版本），
+  仅 ggml-cpu.dll（+变体文件）随选择变化；MKL 模式会从 lib/ 移除全部
+  `ggml-cpu-*.dll`，防止 `ggml_backend_load_all` 双注册 CPU 后端。
+
+### CPU 占用率硬限制
 
 本地推理默认会用满所有核（任务管理器 100%），拖累系统其它操作。
 3.4.32 起支持 Windows Job Object 硬性配额（500ms 调度窗口内强制生效，

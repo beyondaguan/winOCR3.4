@@ -43,6 +43,17 @@ def _ggml_dll_dir() -> Path | None:
     return None
 
 
+def _desired_kernel() -> str:
+    """读取用户选择的 CPU 内核（config [translate].llama_kernel，
+    环境变量 WINOCR_LLAMA_KERNEL 已在 _apply_env_overrides 中覆盖）。"""
+    try:
+        from ..core.config import AppConfig
+
+        return getattr(AppConfig.load().translate, "llama_kernel", "avx")
+    except Exception:  # noqa: BLE001  配置不可用时用默认
+        return "avx"
+
+
 def ensure_ggml_backends() -> None:
     """幂等：确保 ggml CPU 后端（多变体 DL 包）已枚举注册。
 
@@ -52,6 +63,14 @@ def ensure_ggml_backends() -> None:
     if _done:
         return
     _done = True  # 无论成败只尝试一次
+    # 换内核必须发生在 llama.dll 入进程之前（加载后文件被锁），
+    # 所以放在本函数最前面——所有引擎加载模型前都会先调这里。
+    try:
+        from .llama_kernel_switch import sync_kernel
+
+        sync_kernel(_desired_kernel())
+    except Exception:  # noqa: BLE001
+        pass
     try:
         import llama_cpp  # noqa: F401  先触发依赖链，ggml.dll 随之入进程
 
