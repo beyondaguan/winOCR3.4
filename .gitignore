@@ -33,6 +33,7 @@ Desktop.ini
 # ---- 编辑器 ----
 .idea/
 .vscode/
+.trae/
 
 # ---- 本地临时文件 / 下载产物（不入库）----
 llama_cpp_python-*.whl
