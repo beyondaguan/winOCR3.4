@@ -1,6 +1,6 @@
 # WinOCR 3.4 文档总览
 
-> **锚点版本：3.4.30（2026-09-14）**。本文件是项目**唯一技术文档**，由原 8 份文档
+> **锚点版本：3.4.32（2026-09-16）**。本文件是项目**唯一技术文档**，由原 8 份文档
 > （文档总览 / 从零复现 / 小白代码导览 / 踩坑 / 团队规范-修复节奏 / AI 辅助开发规范 /
 > 项目栏蓝图 / 迭代计划）按当前代码状态合并重写而成，历史版本可在 git 历史中找回。
 > 版本变更明细见 [`../CHANGELOG.md`](../CHANGELOG.md)。
@@ -13,7 +13,7 @@ Windows 桌面工具：**截图 → OCR 识别 → 翻译 → AI 解读** 一键
 
 | 维度 | 事实 |
 |------|------|
-| 版本 | 3.4.30（`winocr/version.py` 为单一真相源） |
+| 版本 | 3.4.32（`winocr/version.py` 为单一真相源） |
 | 技术栈 | 纯 Python 3 + Tkinter，无 GUI 框架 |
 | OCR | RapidOCR（PP-OCRv6，tiny/small/medium 三档，本地离线）+ Windows 系统视觉接口 |
 | 翻译 | llama.cpp 本地大模型（GGUF，**硬件自动探测线程/GPU/ctx**）、Argos 离线神经翻译、MyMemory、智谱 GLM、混元 |
@@ -21,7 +21,7 @@ Windows 桌面工具：**截图 → OCR 识别 → 翻译 → AI 解读** 一键
 | 离线能力 | OCR 模型与中英翻译包全部本地，断网完整可用（`[translate] offline_mode=True` 仅走离线引擎） |
 | 硬件自适配 | `core/hardware.py` 自动探测物理核数（封顶 8）、NVIDIA Volta+ GPU（算力≥7.0 才全层卸载）、内存 ctx 窗口（≥16GB→8192 / ≥8GB→4096 / 否则 2048）；老卡（GT 710/GTX 750）自动过滤走 CPU 反而更快；用户可通过 `WINOCR_LLAMA_THREADS` / `WINOCR_LLAMA_GPU_LAYERS` / `WINOCR_LLAMA_CTX` 覆盖 |
 | 跨环境安装 | `install_all.bat` pip 镜像回退链（阿里云→清华→中科大→PyPI 官方）+ conda 回退（南大→华为云→中科大→conda-forge 官方）；Python ≥ 3.10 硬阻塞 |
-| 测试 | 37 个测试文件、249 个用例（`tests/`） |
+| 测试 | 38 个测试文件、256 个用例（`tests/`） |
 | 入口 | `main.py`（GUI / console / doctor / models / config / ocr 子命令） |
 | 分发 | 便携模式（模型内置于 `models/`、`vendor/`）或常规模式（数据放 `~/.winocr`） |
 
@@ -63,14 +63,16 @@ winocr/
 │   ├── paths.py             #   路径决策：便携模式 vs ~/.winocr
 │   ├── crash_handler.py     #   崩溃捕获：sys/threading/tk 三处接管 + faulthandler
 │   ├── hardware.py           #   硬件探测：物理核数 / NVIDIA GPU 架构过滤 / 内存 ctx 建议
+│   ├── cpu_limit.py         #   CPU 占用率硬限制（Windows Job Object CpuRateControl）
 │   └── guards.py / exit_guard.py  # 进程单例锁、退出兜底
 ├── services/                # 服务层：六轴 + 通用客户端
 │   ├── capture/             #   捕获轴：截图、剪贴板（Win32 句柄备份/还原）
 │   ├── ocr/                 #   OCR 轴：rapidocr（按模型路径签名缓存引擎）、系统视觉
-│   ├── translate/           #   翻译轴：llama_cpp（硬件自适配线程/GPU/ctx + 实例锁串行 + 后台预加载）、argos、mymemory、glm、混元
+│   ├── translate/           #   翻译轴：llama_cpp（硬件自适配线程/GPU/ctx + 实例锁串行 + 后台预加载 + AVX 内核自动升级）、argos、mymemory、glm、混元
 │   ├── ai/                  #   AI 轴：llama_cpp_chat、glm_chat、openai 兼容对话
 │   ├── attach/              #   附加轴：TTS（SAPI/MCI 双引擎降级）、hotkey、tray、win32_hotkey
 │   ├── persistence/         #   持久化轴：json_history（原子写+.bak 备份）、knowledge（SQLite FTS5）
+│   ├── llama_backend.py     #   llama.cpp ggml 多变体后端枚举兼容层
 │   └── openai_compatible/   #   OpenAI 兼容客户端（重试/超时/流式）
 ├── ui/tk/                   # UI 层：唯一界面（Tkinter）
 │   ├── app.py               #   TkUi：post 队列泵（跨线程唯一通道）、主题接线
@@ -99,6 +101,8 @@ DOC/ui_demo/                 # UI 原型 HTML（非运行代码）
 9. **离线优先**：`argos` 是断网最后保障；禁止静默联网下载 OCR 模型权重（下载必须走显式脚本）。
 10. **硬件自适配**：所有引擎默认值从 `core/hardware.py` 探测（物理核数封顶 8 / NVIDIA Volta+ 才全层卸载 / 内存决定 ctx 窗口）；用户设环境变量 `WINOCR_LLAMA_*` 永远覆盖探测值；GPU 老卡（Kepler/Pascal）自动过滤走 CPU 反而更快。
 11. **模型切换预加载**：llama.cpp 引擎在配置变更时后台线程预加载新模型，避免用户切模型后首次翻译干等 2~15 秒冷启动；与推理共用实例锁天然串行，不并发崩原生层。
+12. **CPU 占用率硬限制**：`core/cpu_limit.py` 通过 Windows Job Object CpuRateControl 把进程 CPU 占用率压在配置百分比以下（10%~95%），避免推理把核吃满导致系统卡顿；环境变量 `WINOCR_CPU_LIMIT` 或 config 的 `[translate]/[ai].cpu_limit` 一行配置；Win7 自动降级。
+13. **llama.cpp CPU 内核自动升级**：`install_all.bat` 自动换装官方 GGML_BACKEND_DL 多变体包（sandybridge/haswell/avx/avx2 等 14 个按代际命名的内核运行时自选），AVX 原生构建比 conda-forge SSE2 基线提速约 5.5 倍（3.3→18.1 tok/s）；`services/llama_backend.py` 后端枚举兼容层自动调用 `ggml_backend_load_all()`；`tools/fix_llama_avx.py` 提供 `--status/--rollback/--offline` 离线包管理。
 
 ## 5. 功能与热键（当前全集）
 
@@ -118,11 +122,15 @@ DOC/ui_demo/                 # UI 原型 HTML（非运行代码）
 默认项目不可删）、历史记录（检索/详情/复制/导出 MD·TXT/**清空前自动备份 history.json.bak**，
 上限 500 条滚动）、知识库（SQLite FTS5 全文检索 + LIKE 兜底）、主题深浅色（含屏幕取色器）、
 托盘常驻（Esc 仅隐藏）。主窗口「清场」按钮只清显示区，不碰持久化数据。
+**CPU 占用率硬限制**：环境变量 `WINOCR_CPU_LIMIT` 或 config `[translate]/[ai].cpu_limit` 一行配置，
+通过 Windows Job Object CpuRateControl 把进程 CPU 占用率压在 10%~95% 以下，避免推理把核吃满导致系统卡顿。
+**llama.cpp AVX 内核自动升级**：`install_all.bat` 自动换装官方 GGML_BACKEND_DL 多变体包（sandybridge/haswell/
+avx/avx2 等 14 个按代际命名的内核运行时自选），AVX 原生构建比 conda-forge SSE2 基线提速约 5.5 倍。
 
 ## 6. 测试
 
 ```cmd
-.venv\Scripts\python.exe -m pytest tests/ -q      # 37 文件 249 用例
+.venv\Scripts\python.exe -m pytest tests/ -q      # 38 文件 256 用例
 ```
 
 - 布局：`tests/` 按轴分文件（config / projects / json_history / knowledge / ocr / translate / chat…）
@@ -204,5 +212,7 @@ small 随 pip 包自带；Argos 中英包约 140MB 放 `vendor/argos_packages/`�
 
 - 使用说明 / 截图 / 热键表 → [`../README.md`](../README.md)
 - 版本变更明细 → [`../CHANGELOG.md`](../CHANGELOG.md)
+- llama.cpp AVX 多变体内核说明 → [`../docs/llama-avx-variants.md`](../docs/llama-avx-variants.md)
+- 跨硬件适配说明 → [`../docs/cross-hardware-adaptation.md`](../docs/cross-hardware-adaptation.md)
 - UI 原型 → `DOC/ui_demo/*.html`
 - 本文件为唯一技术文档；新增技术内容直接扩充对应章节，不再拆分新文件。
