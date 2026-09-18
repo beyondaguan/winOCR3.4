@@ -76,11 +76,9 @@ echo        虚拟环境 Python：%VENVVER%
 echo.
 echo [3/5] 安装 pip 依赖（约 200MB，请耐心等待）...
 set PYTHONUTF8=1
-set "PIP_TIMEOUT=--timeout=60"
-
 rem ---- pip 依赖安装：依次尝试多个国内镜像，全部失败再走官方 ----
 echo        升级 pip 中...
-%PY% -m pip install --upgrade pip -q %PIP_TIMEOUT%
+%PY% -m pip install --upgrade pip -q
 if errorlevel 1 (
     echo [提示] pip 升级失败，继续尝试安装依赖...
 )
@@ -89,25 +87,25 @@ echo        尝试 pip 镜像...
 set "PIP_INSTALLED=0"
 
 rem 国内镜像顺序：阿里云 -> 清华 -> 中科大
-%PY% -m pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ %PIP_TIMEOUT%
+%PY% -m pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 if not errorlevel 1 set "PIP_INSTALLED=1"
 
 if !PIP_INSTALLED! equ 0 (
     echo    ...阿里云失败，尝试清华镜像...
-    %PY% -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple %PIP_TIMEOUT%
+    %PY% -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
     if not errorlevel 1 set "PIP_INSTALLED=1"
 )
 
 if !PIP_INSTALLED! equ 0 (
     echo    ...清华失败，尝试中科大镜像...
-    %PY% -m pip install -r requirements.txt -i https://pypi.mirrors.ustc.edu.cn/simple/ %PIP_TIMEOUT%
+    %PY% -m pip install -r requirements.txt -i https://pypi.mirrors.ustc.edu.cn/simple/
     if not errorlevel 1 set "PIP_INSTALLED=1"
 )
 
 rem 海外/国内通用兜底：PyPI 官方
 if !PIP_INSTALLED! equ 0 (
     echo    ...国内镜像失败，尝试 PyPI 官方源...
-    %PY% -m pip install -r requirements.txt %PIP_TIMEOUT%
+    %PY% -m pip install -r requirements.txt
     if not errorlevel 1 set "PIP_INSTALLED=1"
 )
 
