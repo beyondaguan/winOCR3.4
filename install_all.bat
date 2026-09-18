@@ -4,12 +4,12 @@ setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 echo ============================================================
-echo   WinOCR 3.4 Ò»ï¿½ï¿½ï¿½ï¿½×°
-echo   ï¿½ï¿½ï¿½ï¿½ + OCRÄ£ï¿½ï¿½ + ï¿½ï¿½ï¿½ß·ï¿½ï¿½ï¿½ï¿½ + llama-cpp-python(ï¿½ï¿½ï¿½ï¿½condaï¿½ï¿½ï¿½ï¿½)
+echo   WinOCR 3.4 Ò»¼ü°²×°
+echo   ÒÀÀµ + OCRÄ£ÐÍ + ÀëÏß·­Òë°ü + llama-cpp-python(¹úÄÚconda¾µÏñ)
 echo ============================================================
 echo.
 
-rem ---- ï¿½ï¿½Î»ï¿½ï¿½ tkinter ï¿½ï¿½ Python ----
+rem ---- ¶¨Î»´ø tkinter µÄ Python ----
 set "PYCMD="
 where py >nul 2>nul
 if not errorlevel 1 (
@@ -22,9 +22,9 @@ if not defined PYCMD (
     )
 )
 if not defined PYCMD (
-    echo [ï¿½ï¿½ï¿½ï¿½] Î´ï¿½Òµï¿½ Pythonï¿½ï¿½ï¿½ë°²×°ï¿½Ù·ï¿½ Python 3.10 - 3.14ï¿½ï¿½
+    echo [´íÎó] Î´ÕÒµ½ Python£¬Çë°²×°¹Ù·½ Python 3.10 - 3.14£º
     echo        https://www.python.org/downloads/
-    echo        ï¿½ï¿½×°Ê±ï¿½ï¿½Ñ¡ "Add Python to PATH" ï¿½ï¿½ "tcl/tk and IDLE"
+    echo        °²×°Ê±¹´Ñ¡ "Add Python to PATH" Óë "tcl/tk and IDLE"
     pause
     exit /b 1
 )
@@ -35,108 +35,108 @@ for /f "tokens=1,2 delims=." %%a in ("%PYVER%") do (
     set "PYMINOR=%%b"
 )
 if !PYMAJOR! lss 3 (
-    echo [é”™è¯¯] Python ç‰ˆæœ¬è¿‡ä½Žï¼š%PYVER%ï¼ˆéœ€è¦ 3.10+ï¼‰
+    echo [´íÎó] Python °æ±¾¹ýµÍ£¬%PYVER%£¨ÐèÒª 3.10+£©
     pause
     exit /b 1
 )
 if !PYMAJOR! equ 3 if !PYMINOR! lss 10 (
-    echo [é”™è¯¯] Python ç‰ˆæœ¬è¿‡ä½Žï¼š%PYVER%ï¼ˆéœ€è¦ 3.10+ï¼‰
-    echo        RapidOCR 3.9 / onnxruntime 1.23 è¦æ±‚ Python 3.10+
+    echo [´íÎó] Python °æ±¾¹ýµÍ£¬%PYVER%£¨ÐèÒª 3.10+£©
+    echo        RapidOCR 3.9 / onnxruntime 1.23 ÒªÇó Python 3.10+
     pause
     exit /b 1
 )
-echo [1/5] Python %PYVER%  ^(å·²æ»¡è¶³ 3.10+^)
+echo [1/5] Python %PYVER%  (ÒÑÂú×ã 3.10+)
 
-rem ---- ï¿½ï¿½ï¿½â»·ï¿½ï¿½ï¿½ï¿½ï¿½Ñ´ï¿½ï¿½Úµï¿½ pip ï¿½ï¿½Ê±ï¿½Ø½ï¿½ï¿½ï¿½----
+rem ---- ÐéÄâ»·¾³£¨ÒÑ´æÔÚµ« pip Ëð»µÊ±ÖØ½¨£©----
 if exist ".venv\Scripts\python.exe" (
     .venv\Scripts\python.exe -m pip --version >nul 2>nul
     if errorlevel 1 (
-        echo [ï¿½ï¿½Ê¾] ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½â»·ï¿½ï¿½È±ï¿½ï¿½ pipï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø½ï¿½...
+        echo [ÌáÊ¾] ÒÑÓÐÐéÄâ»·¾³È±ÉÙ pip£¬ÕýÔÚÖØ½¨...
         rmdir /s /q .venv >nul 2>nul
     )
 )
 
 if not exist ".venv\Scripts\python.exe" (
-    echo [2/5] ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½â»·ï¿½ï¿½ .venv ...
+    echo [2/5] ´´½¨ÐéÄâ»·¾³ .venv ...
     %PYCMD% -m venv .venv
     if errorlevel 1 (
-        echo [ï¿½ï¿½ï¿½ï¿½] ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½â»·ï¿½ï¿½Ê§ï¿½ï¿½
+        echo [´íÎó] ´´½¨ÐéÄâ»·¾³Ê§°Ü
         pause
         exit /b 1
     )
 ) else (
-    echo [2/5] ï¿½ï¿½ï¿½â»·ï¿½ï¿½ï¿½Ñ´ï¿½ï¿½Ú£ï¿½ï¿½ï¿½ï¿½ï¿½
+    echo [2/5] ÐéÄâ»·¾³ÒÑ´æÔÚ£¬Ìø¹ý
 )
 
 set "PY=.venv\Scripts\python.exe"
 for /f "tokens=2" %%v in ('%PY% -V 2^>nul') do set "VENVVER=%%v"
-echo        ï¿½ï¿½ï¿½â»·ï¿½ï¿½ Pythonï¿½ï¿½%VENVVER%
-%PY% -c "import tkinter" >nul 2>nul && echo        tkinterï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ^(GUI Ä£Ê½^) || echo        tkinterï¿½ï¿½È±Ê§ ^(ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£Ê½ï¿½ï¿½ï¿½ï¿½ï¿½é°²×°ï¿½Ù·ï¿½ Python^)
+echo        ÐéÄâ»·¾³ Python£º%VENVVER%
+%PY% -c "import tkinter" >nul 2>nul && echo        tkinter£º¿ÉÓÃ ^(GUI Ä£Ê½^) || echo        tkinter£ºÈ±Ê§ ^(½öÃüÁîÐÐÄ£Ê½£¬½¨Òé°²×°¹Ù·½ Python^)
 
 echo.
-echo [3/5] ï¿½ï¿½×° pip ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¼ 200MBï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÄµÈ´ï¿½ï¿½ï¿½...
+echo [3/5] °²×° pip ÒÀÀµ£¨Ô¼ 200MB£¬ÇëÄÍÐÄµÈ´ý£©...
 set PYTHONUTF8=1
-set "PIP_TIMEOUT=--default-timeout=60"
+set "PIP_TIMEOUT=--timeout=60"
 
-rem ---- pip ï¿½ï¿½ï¿½ï¿½×°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Î»ï¿½Ã½ï¿½É¹ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½×°ï¿½ï¿½ï¿½Ð¶ï¿½ ----
-echo        ï¿½ï¿½ï¿½Ú¹ï¿½ï¿½ï¿½Ù·ï¿½ï¿½ï¿½ï¿½Ú°ï¿½...
+rem ---- pip ÒÀÀµ°²×°£ºÒÀ´Î³¢ÊÔ¶à¸ö¹úÄÚ¾µÏñ£¬È«²¿Ê§°ÜÔÙ×ß¹Ù·½ ----
+echo        Éý¼¶ pip ÖÐ...
 %PY% -m pip install --upgrade pip -q %PIP_TIMEOUT%
 if errorlevel 1 (
-    echo [ï¿½ï¿½Ê¾] pip ï¿½ï¿½ï¿½ï¿½Ê§ï¿½Ü£ï¿½ï¿½ï¿½ï¿½ï¿½Î»ï¿½ï¿½ï¿½ï¿½ï¿½...
+    echo [ÌáÊ¾] pip Éý¼¶Ê§°Ü£¬¼ÌÐø³¢ÊÔ°²×°ÒÀÀµ...
 )
 
-echo        å°è¯• pip é•œåƒ...
+echo        ³¢ÊÔ pip ¾µÏñ...
 set "PIP_INSTALLED=0"
 
-rem å›½å†…é•œåƒé“¾ï¼šé˜¿é‡Œäº‘ â†’ æ¸…åŽ â†’ ä¸­ç§‘å¤§
+rem ¹úÄÚ¾µÏñË³Ðò£º°¢ÀïÔÆ -> Çå»ª -> ÖÐ¿Æ´ó
 %PY% -m pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ %PIP_TIMEOUT%
 if not errorlevel 1 set "PIP_INSTALLED=1"
 
 if !PIP_INSTALLED! equ 0 (
-    echo    ...é˜¿é‡Œäº‘å¤±è´¥ï¿½ï¿½ï¿½ï¿½×°ï¿½Ô¥ï¿½ï¿½ï¿½ï¿½...
+    echo    ...°¢ÀïÔÆÊ§°Ü£¬³¢ÊÔÇå»ª¾µÏñ...
     %PY% -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple %PIP_TIMEOUT%
     if not errorlevel 1 set "PIP_INSTALLED=1"
 )
 
 if !PIP_INSTALLED! equ 0 (
-    echo    ...æ¸…åŽå¤±è´¥ï¿½ï¿½ï¿½ï¿½×°ï¿½Ñ§ï¿½ï¿½ï¿½ï¿½...
+    echo    ...Çå»ªÊ§°Ü£¬³¢ÊÔÖÐ¿Æ´ó¾µÏñ...
     %PY% -m pip install -r requirements.txt -i https://pypi.mirrors.ustc.edu.cn/simple/ %PIP_TIMEOUT%
     if not errorlevel 1 set "PIP_INSTALLED=1"
 )
 
-rem æµ·å¤–/å›½å†…é€šç”¨å›žé€€ï¼šPyPI å®˜æ–¹
+rem º£Íâ/¹úÄÚÍ¨ÓÃ¶µµ×£ºPyPI ¹Ù·½
 if !PIP_INSTALLED! equ 0 (
-    echo    ...å›½å†…é•œåƒå¤±è´¥ï¿½ï¿½ï¿½ï¿½×°ï¿½PyPI ï¿½ï¿½ï¿½ï¿½...
+    echo    ...¹úÄÚ¾µÏñÊ§°Ü£¬³¢ÊÔ PyPI ¹Ù·½Ô´...
     %PY% -m pip install -r requirements.txt %PIP_TIMEOUT%
     if not errorlevel 1 set "PIP_INSTALLED=1"
 )
 
 if !PIP_INSTALLED! equ 0 (
     echo.
-    echo [ï¿½ï¿½ï¿½ï¿½] ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×°Ê§ï¿½Ü£ï¿½ï¿½ï¿½ï¿½ï¿½Ð»ï¿½ï¿½ï¿½Ð»ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¥ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
-    echo        https://pypi.org/simple/ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¥
+    echo [´íÎó] ÒÀÀµ°²×°Ê§°Ü£¬Çë¼ì²éÍøÂçºóÖØÐÂÔËÐÐ±¾½Å±¾
+    echo        https://pypi.org/simple/ ¿ÉÄÜÎÞ·¨·ÃÎÊ
     pause
     exit /b 1
 )
 
 echo.
-echo [4/5] ï¿½ï¿½ï¿½ï¿½Ä£ï¿½Í²ï¿½ï¿½ï¿½×° llama-cpp-python
-echo        OCR Ô¼140MB + ï¿½ï¿½ï¿½ï¿½ï¿½Ô¼160MB + LLM Ô¼1.5GBï¿½ï¿½ï¿½ï¿½ï¿½ß¹ï¿½ï¿½ï¿½ï¿½ï¿½Â·
-echo        ï¿½Ñ¾ï¿½Î»ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð¶Ïºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+echo [4/5] ÏÂÔØÄ£ÐÍ²¢°²×° llama-cpp-python
+echo        OCR Ô¼140MB + ·­Òë°üÔ¼160MB + LLM Ô¼1.5GB£¬¾ù×ß¹úÄÚÁ´Â·
+echo        ÒÑ¾ÍÎ»µÄÎÄ¼þ×Ô¶¯Ìø¹ý£¬ÖÐ¶ÏºóÖØÐÂÔËÐÐ¼´¿ÉÐø´«
 echo.
 
-rem setup.bat Í¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ WINOCR_INTERACTIVE=1 ï¿½ï¿½ï¿½Ã±ï¿½ï¿½Å±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú´ï¿½Ñ¯ï¿½ï¿½ï¿½Ç·ï¿½ï¿½ï¿½ï¿½ï¿½ LLM
+rem setup.bat Í¨¹ýÉèÖÃ WINOCR_INTERACTIVE=1 ¸´ÓÃ±¾½Å±¾£¬²¢ÔÚ´ËÑ¯ÎÊÊÇ·ñÏÂÔØ LLM
 set "DL_ARGS="
 if defined WINOCR_INTERACTIVE (
-    set /p DL_LLM="ï¿½Ç·ï¿½ï¿½ï¿½ï¿½Ø±ï¿½ï¿½ï¿½ LLM Ä£ï¿½Í£ï¿½Qwen2.5 + Hunyuan-MTï¿½ï¿½ï¿½ï¿½Ô¼1.5GBï¿½ï¿½ï¿½ï¿½ï¿½Ø³ï¿½=ï¿½ï¿½ï¿½Ø£ï¿½ï¿½ï¿½ï¿½ï¿½ n ï¿½ï¿½ï¿½ï¿½: "
+    set /p DL_LLM="ÊÇ·ñÏÂÔØ±¾µØ LLM Ä£ÐÍ£¨Qwen2.5 + Hunyuan-MT£¬¹²Ô¼1.5GB£©£¿»Ø³µ=ÏÂÔØ£¬ÊäÈë n Ìø¹ý: "
     if /i "!DL_LLM!"=="n" set "DL_ARGS=ocr translate wheel"
 )
 
 %PY% tools\download_all_models.py !DL_ARGS!
 if errorlevel 1 (
     echo.
-    echo [ï¿½ï¿½Ê¾] ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½ï¿½ï¿½Ê§ï¿½Ü£ï¿½OCR ï¿½ï¿½ï¿½Ä¹ï¿½ï¿½ï¿½ï¿½Ô¿ï¿½Ê¹ï¿½Ã¡ï¿½
-    echo        ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð±ï¿½ï¿½Å±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Éµï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø¸ï¿½ï¿½ï¿½ï¿½Ø¡ï¿½
+    echo [ÌáÊ¾] ²¿·Ö×ÊÔ´ÏÂÔØÊ§°Ü£¬OCR ºËÐÄ¹¦ÄÜÈÔ¿ÉÊ¹ÓÃ¡£
+    echo        ÍøÂç»Ö¸´ºóÖØÐÂÔËÐÐ±¾½Å±¾¼´¿ÉÐø´«£¬ÒÑÍê³ÉµÄÎÄ¼þ²»»áÖØ¸´ÏÂÔØ¡£
 )
 
 rem ---- [4b] official llama.cpp multi-variant CPU DLLs (AVX speed-up) ----
@@ -150,17 +150,17 @@ if errorlevel 1 (
 )
 
 echo.
-echo [5/5] ï¿½Ô¼ï¿½...
+echo [5/5] ×Ô¼ì...
 echo ============================================================
 %PY% main.py doctor
 
 echo.
 echo ============================================================
-echo   ï¿½ï¿½×°ï¿½ï¿½ï¿½
+echo   °²×°Íê³É
 echo ------------------------------------------------------------
-echo   ï¿½ï¿½ï¿½ï¿½Í¼ï¿½Î½ï¿½ï¿½ï¿½ : Ë«ï¿½ï¿½ run.bat
-echo   ï¿½Ù´ï¿½ï¿½Ô¼ï¿½     : .venv\Scripts\python.exe main.py doctor
-echo   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¶ï¿½ï¿½   : .venv\Scripts\python.exe main.py ocr Í¼Æ¬.png -t zh-CN
+echo   Æô¶¯Í¼ÐÎ½çÃæ : Ë«»÷ run.bat
+echo   ÔÙ´Î×Ô¼ì     : .venv\Scripts\python.exe main.py doctor
+echo   ÃüÁîÐÐÊ¶±ð   : .venv\Scripts\python.exe main.py ocr Í¼Æ¬.png -t zh-CN
 echo ============================================================
 
 pause
